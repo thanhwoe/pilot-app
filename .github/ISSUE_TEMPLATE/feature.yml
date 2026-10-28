@@ -1,0 +1,39 @@
+name: Feature
+description: A unit of work for the factory, from spec to merged PR
+labels: ["inbox"]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      placeholder: As a <member of a group>, I want <capability> so that <benefit>.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: One Given/When/Then per behaviour. Each one becomes a test.
+      placeholder: |
+        - Given a group with members A and B
+          When A adds an expense of 100000 VND split equally
+          Then A's balance is +50000 and B's balance is -50000
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which apps change (api, web, mobile, shared) and anything the solution must use.
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-goals
+      description: What this issue must not do.
+  - type: textarea
+    id: design
+    attributes:
+      label: Design references
+      description: Screenshots or links, when there is UI.

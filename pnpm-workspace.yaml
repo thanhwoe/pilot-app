@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Expo's Metro bundler works most reliably with a flat node_modules.
+nodeLinker: hoisted
+
+allowBuilds:
+  esbuild: true
+  sharp: false
+  unrs-resolver: false
