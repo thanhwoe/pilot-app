@@ -1,9 +1,15 @@
 import { buildApp } from "./app";
 import { createDb } from "./db/client";
 import { env } from "./env";
+import { apiVersion } from "./version";
 
 const database = createDb(env.DATABASE_URL);
-const app = buildApp({ pingDb: database.ping, corsOrigins: env.CORS_ORIGINS, logger: true });
+const app = buildApp({
+  pingDb: database.ping,
+  corsOrigins: env.CORS_ORIGINS,
+  version: apiVersion,
+  logger: true,
+});
 
 const shutdown = async () => {
   await app.close();
