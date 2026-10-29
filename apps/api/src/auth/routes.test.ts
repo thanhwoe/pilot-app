@@ -1,6 +1,7 @@
 import {
   codeExpiresAt,
   errorResponseSchema,
+  meResponseSchema,
   sessionExpiresAt,
   signInResponseSchema,
 } from "@gop/shared";
@@ -41,6 +42,20 @@ function setup() {
     },
     signIn(email: unknown, code: unknown) {
       return app.inject({ method: "POST", url: "/auth/sign-in", payload: { email, code } });
+    },
+    me(authorization?: string) {
+      return app.inject({
+        method: "GET",
+        url: "/me",
+        headers: authorization ? { authorization } : {},
+      });
+    },
+    signOut(authorization?: string) {
+      return app.inject({
+        method: "POST",
+        url: "/auth/sign-out",
+        headers: authorization ? { authorization } : {},
+      });
     },
     /** Asks for a code a second after the last request, and returns the code the sender got. */
     async codeFor(email: string) {
@@ -256,5 +271,83 @@ describe("POST /auth/sign-in", () => {
 
     expect(res.statusCode).toBe(400);
     expect(errorResponseSchema.parse(res.json())).toEqual({ error: "invalid_request" });
+  });
+});
+
+/** Signs in and returns the session and the `Authorization` header for it. */
+async function signedIn(harness: ReturnType<typeof setup>, email = "ana@example.com") {
+  const res = await harness.signIn(email, await harness.codeFor(email));
+  const session = signInResponseSchema.parse(res.json());
+  return { ...session, authorization: `Bearer ${session.token}` };
+}
+
+describe("GET /me", () => {
+  it("returns the signed-in user's id and email", async () => {
+    const harness = setup();
+    const { user, authorization } = await signedIn(harness);
+
+    const res = await harness.me(authorization);
+
+    expect(res.statusCode).toBe(200);
+    expect(meResponseSchema.parse(res.json())).toEqual(user);
+  });
+
+  it.each([
+    ["no Authorization header", undefined],
+    ["an unknown token", "Bearer not-a-real-token"],
+    ["an empty bearer token", "Bearer "],
+    ["another scheme", "Basic YW5hOnB3"],
+  ])("answers 401 with %s", async (_case, authorization) => {
+    const harness = setup();
+    await signedIn(harness);
+
+    const res = await harness.me(authorization);
+
+    expect(res.statusCode).toBe(401);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "unauthorized" });
+  });
+
+  it("answers 401 once the session is 30 days old", async () => {
+    const harness = setup();
+    const { authorization } = await signedIn(harness);
+
+    harness.advance(30 * 24 * 60 * minute - 1);
+    expect((await harness.me(authorization)).statusCode).toBe(200);
+    harness.advance(1);
+    expect((await harness.me(authorization)).statusCode).toBe(401);
+  });
+});
+
+describe("POST /auth/sign-out", () => {
+  it("ends the session, so its token then gets 401", async () => {
+    const harness = setup();
+    const { authorization } = await signedIn(harness);
+
+    const res = await harness.signOut(authorization);
+
+    expect([res.statusCode, res.body]).toEqual([204, ""]);
+    expect((await harness.me(authorization)).statusCode).toBe(401);
+  });
+
+  it("ends only that session", async () => {
+    const harness = setup();
+    const first = await signedIn(harness);
+    const second = await signedIn(harness);
+
+    await harness.signOut(first.authorization);
+
+    expect((await harness.me(second.authorization)).statusCode).toBe(200);
+  });
+
+  it.each([
+    ["no token", undefined],
+    ["an unknown token", "Bearer not-a-real-token"],
+  ])("answers 401 with %s", async (_case, authorization) => {
+    const harness = setup();
+
+    const res = await harness.signOut(authorization);
+
+    expect(res.statusCode).toBe(401);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "unauthorized" });
   });
 });

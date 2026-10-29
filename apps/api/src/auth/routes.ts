@@ -3,12 +3,13 @@ import {
   codeExpiresAt,
   codeRequestWindowStart,
   type ErrorResponse,
+  type MeResponse,
   requestCodeBodySchema,
   type SignInResponse,
   sessionExpiresAt,
   signInBodySchema,
 } from "@gop/shared";
-import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import { generateSessionToken, generateSignInCode, hashSecret } from "./secrets";
 import type { AuthStore } from "./store";
 
@@ -25,9 +26,27 @@ const invalidRequest: ErrorResponse = { error: "invalid_request" };
 const tooManyRequests: ErrorResponse = { error: "too_many_requests" };
 /** One body for every failed sign-in, so a response never hints why it failed. */
 const invalidCode: ErrorResponse = { error: "invalid_code" };
+const unauthorized: ErrorResponse = { error: "unauthorized" };
+
+/** The token from `Authorization: Bearer <token>`, or null. */
+function bearerToken(request: FastifyRequest): string | null {
+  const match = /^Bearer (\S+)$/.exec(request.headers.authorization ?? "");
+  return match?.[1] ?? null;
+}
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps) {
   const { authStore, authSecret, sendSignInCode, now } = deps;
+
+  /** The hash of the request's session token and its user, or null when there's no live session. */
+  async function findSession(request: FastifyRequest) {
+    const token = bearerToken(request);
+    if (!token) {
+      return null;
+    }
+    const tokenHash = hashSecret(token, authSecret);
+    const user = await authStore.findSessionUser(tokenHash, now());
+    return user ? { tokenHash, user } : null;
+  }
 
   app.post("/auth/code", async (request, reply) => {
     const body = requestCodeBodySchema.safeParse(request.body);
@@ -76,5 +95,22 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps) {
     }
     const response: SignInResponse = { token, user };
     return response;
+  });
+  app.get("/me", async (request, reply) => {
+    const session = await findSession(request);
+    if (!session) {
+      return reply.code(401).send(unauthorized);
+    }
+    const response: MeResponse = session.user;
+    return response;
+  });
+
+  app.post("/auth/sign-out", async (request, reply) => {
+    const session = await findSession(request);
+    if (!session) {
+      return reply.code(401).send(unauthorized);
+    }
+    await authStore.deleteSession(session.tokenHash);
+    return reply.code(204).send();
   });
 }
