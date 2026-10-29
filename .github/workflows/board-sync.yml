@@ -27,7 +27,9 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
           ISSUE_STATE: ${{ github.event.issue.state }}
           ISSUE_LABELS_JSON: ${{ toJSON(github.event.issue.labels.*.name) }}
-          PROJECT_OWNER: thanhwoe
+          # "@me" is the token's own account. It skips gh's owner-type lookup, which failed in
+          # Actions with "unknown owner type".
+          PROJECT_OWNER: "@me"
           PROJECT_NUMBER: "1"
         run: |
           if [ -z "$GH_TOKEN" ]; then
