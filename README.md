@@ -8,10 +8,13 @@ Requires Node 24, pnpm 11 and Docker.
 
 ```bash
 pnpm install
-cp apps/api/.env.example apps/api/.env
+cp apps/api/.env.example apps/api/.env   # then set AUTH_SECRET: openssl rand -base64 32
 pnpm db:up
+pnpm --filter @gop/api db:migrate
 pnpm dev
 ```
+
+Sign-in codes are written to the API log; no email is sent yet.
 
 - API: http://localhost:3001/health
 - Web: http://localhost:3000
