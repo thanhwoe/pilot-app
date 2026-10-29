@@ -41,8 +41,8 @@ Codes stay in `sign_in_codes` after they are used or replaced, so the 15-minute 
 
 ### Config (`apps/api/src/env.ts`, `.env.example`)
 
-- `NODE_ENV`: `development` | `test` | `production`, default `development`.
-- `DEV_SIGN_IN_CODES`: `true` | `false`, default `false`. The dev endpoint is on only when this is `true` **and** `NODE_ENV` is not `production`.
+- `NODE_ENV`: any value, no default. Only exactly `development` or `test` can turn the dev endpoint on, so it fails closed when `NODE_ENV` is unset (changed after review).
+- `DEV_SIGN_IN_CODES`: `true` | `false`, default `false`. The dev endpoint is on only when this is `true` **and** `NODE_ENV` is `development` or `test`.
 - `AUTH_SECRET`: required, at least 32 characters. The key for hashing codes and session tokens (HMAC-SHA256), so a copy of the database alone can't be used to recover a live code. `.env.example` holds a placeholder and says how to generate a real one.
 
 ## Files
