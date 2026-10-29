@@ -47,7 +47,8 @@ Each issue goes through the `factory-kit` skills, which live in `.claude/` as a 
 1. `/factory-intake <N>` runs the zero-questions check.
 2. `/factory-spec <N>` writes `docs/specs/<N>.md`. Gate 1: the `spec-ok` label.
 3. `/factory-plan <N>` writes `docs/specs/<N>-plan.md`. Gate 2: the `plan-ok` label.
-4. `/factory-build <N>` builds it test-first, then runs `/factory-ship`, which opens the PR. Gate 3: review and merge.
+4. `/factory-build <N>` builds it test-first, then runs `/factory-ship`, which opens the PR. Gate 3: review, starting from the PR's "How to review" section, then merge.
+5. `/factory-retro <N>` measures how it went and turns what went wrong into at most three concrete changes.
 
 Never edit `.claude/skills/factory-*`, `.claude/agents/factory-*` or `.claude/factory-kit/` here. Change the kit in `solo-factory`, then run `node scripts/sync-kit.mjs ~/projects/pilot-app` there.
 
