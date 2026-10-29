@@ -1,4 +1,9 @@
-import { codeExpiresAt, errorResponseSchema, sessionExpiresAt } from "@gop/shared";
+import {
+  codeExpiresAt,
+  errorResponseSchema,
+  sessionExpiresAt,
+  signInResponseSchema,
+} from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
 import { createMemoryAuthStore } from "./memory-store";
@@ -33,6 +38,19 @@ function setup() {
     },
     requestCode(email: unknown) {
       return app.inject({ method: "POST", url: "/auth/code", payload: { email } });
+    },
+    signIn(email: unknown, code: unknown) {
+      return app.inject({ method: "POST", url: "/auth/sign-in", payload: { email, code } });
+    },
+    /** Asks for a code a second after the last request, and returns the code the sender got. */
+    async codeFor(email: string) {
+      now = new Date(now.getTime() + 1000);
+      await app.inject({ method: "POST", url: "/auth/code", payload: { email } });
+      const code = sent.at(-1)?.code;
+      if (!code) {
+        throw new Error("No code was sent");
+      }
+      return code;
     },
   };
 }
@@ -116,5 +134,127 @@ describe("POST /auth/code", () => {
 
     expect([known.statusCode, known.body]).toEqual([204, ""]);
     expect([unknown.statusCode, unknown.body]).toEqual([204, ""]);
+  });
+});
+
+/** A 6-digit code that is not `code`. */
+const otherThan = (code: string) => (code === "000000" ? "111111" : "000000");
+
+describe("POST /auth/sign-in", () => {
+  it("signs in with the code and creates the account the first time", async () => {
+    const { codeFor, signIn } = setup();
+    const code = await codeFor("ana@example.com");
+
+    const res = await signIn("ana@example.com", code);
+
+    expect(res.statusCode).toBe(200);
+    const body = signInResponseSchema.parse(res.json());
+    expect(body.user.email).toBe("ana@example.com");
+    expect(body.token.length).toBeGreaterThanOrEqual(43);
+  });
+
+  it("signs in to the same account the next time", async () => {
+    const { codeFor, signIn } = setup();
+    const first = signInResponseSchema.parse(
+      (await signIn("ana@example.com", await codeFor("ana@example.com"))).json(),
+    );
+
+    const second = signInResponseSchema.parse(
+      (await signIn("ana@example.com", await codeFor("ana@example.com"))).json(),
+    );
+
+    expect(second.user).toEqual(first.user);
+    expect(second.token).not.toBe(first.token);
+  });
+
+  it("treats an email with spaces and capitals as the same account", async () => {
+    const { codeFor, signIn } = setup();
+    const first = signInResponseSchema.parse(
+      (await signIn("ana@example.com", await codeFor("ana@example.com"))).json(),
+    );
+
+    const code = await codeFor("  ANA@Example.com ");
+    const second = signInResponseSchema.parse((await signIn(" Ana@EXAMPLE.com", code)).json());
+
+    expect(second.user).toEqual(first.user);
+  });
+
+  it("answers 401 to a code that does not match", async () => {
+    const { codeFor, signIn } = setup();
+    const code = await codeFor("ana@example.com");
+
+    const res = await signIn("ana@example.com", otherThan(code));
+
+    expect(res.statusCode).toBe(401);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "invalid_code" });
+  });
+
+  it("answers 401 to a code 10 minutes old", async () => {
+    const { codeFor, signIn, advance } = setup();
+    const code = await codeFor("ana@example.com");
+
+    advance(10 * minute);
+
+    expect((await signIn("ana@example.com", code)).statusCode).toBe(401);
+  });
+
+  it("answers 401 to a code that was already used", async () => {
+    const { codeFor, signIn } = setup();
+    const code = await codeFor("ana@example.com");
+    expect((await signIn("ana@example.com", code)).statusCode).toBe(200);
+
+    expect((await signIn("ana@example.com", code)).statusCode).toBe(401);
+  });
+
+  it("answers 401 to a code that a newer one replaced", async () => {
+    const { codeFor, signIn, advance } = setup();
+    const first = await codeFor("ana@example.com");
+    advance(minute);
+    const second = await codeFor("ana@example.com");
+
+    expect((await signIn("ana@example.com", first)).statusCode).toBe(first === second ? 200 : 401);
+    expect((await signIn("ana@example.com", second)).statusCode).toBe(first === second ? 401 : 200);
+  });
+
+  it("answers 401 to the right code after 5 wrong attempts", async () => {
+    const { codeFor, signIn } = setup();
+    const code = await codeFor("ana@example.com");
+    for (let attempt = 0; attempt < 5; attempt++) {
+      expect((await signIn("ana@example.com", otherThan(code))).statusCode).toBe(401);
+    }
+
+    expect((await signIn("ana@example.com", code)).statusCode).toBe(401);
+  });
+
+  it("gives the same 401 body for wrong, expired, reused and never-requested codes", async () => {
+    const { codeFor, signIn, advance } = setup();
+    const wrong = await signIn("ana@example.com", otherThan(await codeFor("ana@example.com")));
+    const usedCode = await codeFor("ben@example.com");
+    await signIn("ben@example.com", usedCode);
+    const reused = await signIn("ben@example.com", usedCode);
+    const neverRequested = await signIn("cam@example.com", "123456");
+    const expiredCode = await codeFor("dan@example.com");
+    advance(10 * minute);
+    const expired = await signIn("dan@example.com", expiredCode);
+
+    for (const res of [wrong, reused, neverRequested, expired]) {
+      expect([res.statusCode, res.body]).toEqual([401, wrong.body]);
+    }
+  });
+
+  it.each([
+    ["a code that is too short", "ana@example.com", "12345"],
+    ["a code that is too long", "ana@example.com", "1234567"],
+    ["a code with letters", "ana@example.com", "12a456"],
+    ["a code sent as a number", "ana@example.com", 123456],
+    ["an email over 254 characters", `${"a".repeat(64)}@${"b".repeat(186)}.com`, "123456"],
+    ["a missing email", undefined, "123456"],
+  ])("answers 400 to %s", async (_case, email, code) => {
+    const { signIn } = setup();
+
+    const res = await signIn(email, code);
+
+    expect(res.statusCode).toBe(400);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "invalid_request" });
   });
 });
