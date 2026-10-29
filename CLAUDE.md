@@ -39,6 +39,17 @@ Before you say a change is done, run `pnpm lint && pnpm typecheck && pnpm test`.
 - **Dependencies:** pin exact versions, except Expo packages, which follow `npx expo install`.
 - **Formatting:** Biome formats with double quotes and 2 spaces. Do not hand-format.
 
+## Factory workflow
+
+Each issue goes through the `factory-kit` skills, which live in `.claude/` as a copy generated from `thanhwoe/solo-factory`:
+
+1. `/factory-intake <N>` runs the zero-questions check.
+2. `/factory-spec <N>` writes `docs/specs/<N>.md`. Gate 1: the `spec-ok` label.
+3. `/factory-plan <N>` writes `docs/specs/<N>-plan.md`. Gate 2: the `plan-ok` label.
+4. `/factory-build <N>` builds it test-first, then runs `/factory-ship`, which opens the PR. Gate 3: review and merge.
+
+Never edit `.claude/skills/factory-*`, `.claude/agents/factory-*` or `.claude/factory-kit/` here. Change the kit in `solo-factory`, then run `node scripts/sync-kit.mjs ~/projects/pilot-app` there.
+
 ## Where work runs
 
 - **Cloud session (Linux):** API, `packages/shared`, web, unit tests, specs and plans.
