@@ -1,4 +1,5 @@
 import { buildApp } from "./app";
+import { devCodesFor } from "./auth/dev-codes";
 import { logSignInCode } from "./auth/log-code-sender";
 import { createPostgresAuthStore } from "./auth/store";
 import { createDb } from "./db/client";
@@ -14,6 +15,7 @@ const app = buildApp({
   authStore: createPostgresAuthStore(database.db),
   authSecret: env.AUTH_SECRET,
   sendSignInCode: logSignInCode,
+  devCodes: devCodesFor(env),
 });
 
 const shutdown = async () => {
