@@ -1,4 +1,7 @@
 import { buildApp } from "./app";
+import { devCodesFor } from "./auth/dev-codes";
+import { logSignInCode } from "./auth/log-code-sender";
+import { createPostgresAuthStore } from "./auth/store";
 import { createDb } from "./db/client";
 import { env } from "./env";
 import { apiVersion } from "./version";
@@ -9,6 +12,10 @@ const app = buildApp({
   corsOrigins: env.CORS_ORIGINS,
   version: apiVersion,
   logger: true,
+  authStore: createPostgresAuthStore(database.db),
+  authSecret: env.AUTH_SECRET,
+  sendSignInCode: logSignInCode,
+  devCodes: devCodesFor(env),
 });
 
 const shutdown = async () => {

@@ -1,18 +1,15 @@
 import { z } from "zod";
+import { devCodesEnvSchema } from "./auth/dev-codes";
+import { databaseEnvSchema } from "./db/database-env";
 
-try {
-  process.loadEnvFile();
-} catch {
-  // No .env file: rely on the real environment (CI, cloud sessions).
-}
-
-const envSchema = z.object({
-  DATABASE_URL: z.url(),
+const envSchema = databaseEnvSchema.extend(devCodesEnvSchema.shape).extend({
   PORT: z.coerce.number().int().positive().default(3001),
   CORS_ORIGINS: z
     .string()
     .default("http://localhost:3000")
     .transform((value) => value.split(",").map((origin) => origin.trim())),
+  /** Key for hashing sign-in codes and session tokens. Changing it signs everyone out. */
+  AUTH_SECRET: z.string().min(32),
 });
 
 export type Env = z.infer<typeof envSchema>;
