@@ -1,4 +1,4 @@
-import { codeExpiresAt, sessionExpiresAt } from "@gop/shared";
+import { sessionExpiresAt } from "@gop/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AuthStore } from "./store";
 
@@ -31,8 +31,8 @@ export function describeAuthStoreContract(name: string, open: () => Promise<Stor
       await harness.close();
     });
 
-    async function saveCode(email: string, codeHash: string, createdAt = t0) {
-      await store.saveCode({ email, codeHash, createdAt, expiresAt: codeExpiresAt(createdAt) });
+    async function saveCode(email: string, codeHash: string, now = t0) {
+      expect(await store.issueCode({ email, codeHash, now })).toBe(true);
     }
 
     function signIn(
@@ -49,14 +49,40 @@ export function describeAuthStoreContract(name: string, open: () => Promise<Stor
       });
     }
 
-    it("counts the codes saved for an email since a time", async () => {
+    it("issues at most 5 codes per email in 15 minutes", async () => {
       const email = nextEmail();
-      await saveCode(email, "a", at(0));
-      await saveCode(email, "b", at(5 * minute));
-      await saveCode(nextEmail(), "c", at(5 * minute));
+      for (let request = 0; request < 5; request++) {
+        await saveCode(email, `code-${request}`, at(request * minute));
+      }
+      await saveCode(nextEmail(), "other", at(5 * minute));
 
-      expect(await store.countCodesSince(email, at(0))).toBe(2);
-      expect(await store.countCodesSince(email, at(1))).toBe(1);
+      expect(await store.issueCode({ email, codeHash: "sixth", now: at(5 * minute) })).toBe(false);
+      expect(await store.countCodesSince(email, at(0))).toBe(5);
+      expect(await store.issueCode({ email, codeHash: "later", now: at(15 * minute + 1) })).toBe(
+        true,
+      );
+    });
+
+    it("issues at most 5 codes even when requests arrive together", async () => {
+      const email = nextEmail();
+
+      const issued = await Promise.all(
+        Array.from({ length: 10 }, (_, request) =>
+          store.issueCode({ email, codeHash: `p-${request}`, now: t0 }),
+        ),
+      );
+
+      expect(issued.filter(Boolean)).toHaveLength(5);
+      expect(await store.countCodesSince(email, at(0))).toBe(5);
+    });
+
+    it("treats the last code issued as the newest, even at the same instant", async () => {
+      const email = nextEmail();
+      await saveCode(email, "first", t0);
+      await saveCode(email, "second", t0);
+
+      expect(await signIn(email, "first")).toBeNull();
+      expect(await signIn(email, "second")).not.toBeNull();
     });
 
     it("creates the account on the first sign-in and reuses it after", async () => {

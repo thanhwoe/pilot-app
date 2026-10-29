@@ -1,7 +1,4 @@
 import {
-  canRequestCode,
-  codeExpiresAt,
-  codeRequestWindowStart,
   type ErrorResponse,
   type MeResponse,
   requestCodeBodySchema,
@@ -54,20 +51,15 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps) {
       return reply.code(400).send(invalidRequest);
     }
     const { email } = body.data;
-    const createdAt = now();
-
-    const recent = await authStore.countCodesSince(email, codeRequestWindowStart(createdAt));
-    if (!canRequestCode(recent)) {
-      return reply.code(429).send(tooManyRequests);
-    }
-
     const code = generateSignInCode();
-    await authStore.saveCode({
+    const issued = await authStore.issueCode({
       email,
       codeHash: hashSecret(code, authSecret),
-      createdAt,
-      expiresAt: codeExpiresAt(createdAt),
+      now: now(),
     });
+    if (!issued) {
+      return reply.code(429).send(tooManyRequests);
+    }
     await sendSignInCode(email, code, request.log);
     return reply.code(204).send();
   });

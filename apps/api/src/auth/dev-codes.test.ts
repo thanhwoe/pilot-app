@@ -33,11 +33,12 @@ function setup(devCodes: DevCodes | undefined) {
 }
 
 describe("devCodesEnvSchema", () => {
-  it("is off in development by default", () => {
-    expect(devCodesEnvSchema.parse({})).toEqual({
-      NODE_ENV: "development",
-      DEV_SIGN_IN_CODES: false,
-    });
+  it("is off by default, with NODE_ENV unset", () => {
+    expect(devCodesEnvSchema.parse({})).toEqual({ DEV_SIGN_IN_CODES: false });
+  });
+
+  it("accepts any NODE_ENV, so other platforms' values don't stop the API", () => {
+    expect(devCodesEnvSchema.parse({ NODE_ENV: "staging" }).NODE_ENV).toBe("staging");
   });
 
   it.each([
@@ -47,9 +48,8 @@ describe("devCodesEnvSchema", () => {
     expect(devCodesEnvSchema.parse({ DEV_SIGN_IN_CODES: value }).DEV_SIGN_IN_CODES).toBe(expected);
   });
 
-  it("rejects anything else", () => {
+  it("rejects any other flag value", () => {
     expect(devCodesEnvSchema.safeParse({ DEV_SIGN_IN_CODES: "yes" }).success).toBe(false);
-    expect(devCodesEnvSchema.safeParse({ NODE_ENV: "staging" }).success).toBe(false);
   });
 });
 
@@ -65,6 +65,13 @@ describe("devCodesFor", () => {
   it("is off in production even with the flag", () => {
     expect(devCodesFor({ NODE_ENV: "production", DEV_SIGN_IN_CODES: true })).toBeUndefined();
   });
+
+  it.each([undefined, "", "staging", "Development"])(
+    "is off with the flag when NODE_ENV is %j",
+    (NODE_ENV) => {
+      expect(devCodesFor({ NODE_ENV, DEV_SIGN_IN_CODES: true })).toBeUndefined();
+    },
+  );
 });
 
 describe("GET /dev/sign-in-code", () => {

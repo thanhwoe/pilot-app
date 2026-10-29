@@ -1,9 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { isCodeUsable, isSessionValid, type User } from "@gop/shared";
+import {
+  canRequestCode,
+  codeExpiresAt,
+  codeRequestWindowStart,
+  isCodeUsable,
+  isSessionValid,
+  type User,
+} from "@gop/shared";
 import { hashesMatch } from "./secrets";
-import type { AuthStore, NewSignInCode } from "./store";
+import { type AuthStore, nextCodeTime } from "./store";
 
-interface StoredCode extends NewSignInCode {
+interface StoredCode {
+  email: string;
+  codeHash: string;
+  createdAt: Date;
+  expiresAt: Date;
   attempts: number;
   usedAt: Date | null;
 }
@@ -22,8 +33,23 @@ export function createMemoryAuthStore(): AuthStore {
       return codes.filter((code) => code.email === email && code.createdAt >= since).length;
     },
 
-    async saveCode(code) {
-      codes.push({ ...code, attempts: 0, usedAt: null });
+    // No await inside, so the check and the save can't interleave with another request.
+    async issueCode({ email, codeHash, now }) {
+      const forEmail = codes.filter((code) => code.email === email);
+      const since = codeRequestWindowStart(now);
+      if (!canRequestCode(forEmail.filter((code) => code.createdAt >= since).length)) {
+        return false;
+      }
+      const createdAt = nextCodeTime(forEmail.at(-1)?.createdAt, now);
+      codes.push({
+        email,
+        codeHash,
+        createdAt,
+        expiresAt: codeExpiresAt(createdAt),
+        attempts: 0,
+        usedAt: null,
+      });
+      return true;
     },
 
     // No await inside, so two calls can't interleave: the same guarantee the row lock gives.

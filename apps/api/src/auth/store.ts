@@ -1,14 +1,20 @@
-import { isCodeUsable, isSessionValid, type User } from "@gop/shared";
+import {
+  canRequestCode,
+  codeExpiresAt,
+  codeRequestWindowStart,
+  isCodeUsable,
+  isSessionValid,
+  type User,
+} from "@gop/shared";
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { sessions, signInCodes, users } from "../db/schema";
 import { hashesMatch } from "./secrets";
 
-export interface NewSignInCode {
+export interface CodeRequest {
   email: string;
   codeHash: string;
-  createdAt: Date;
-  expiresAt: Date;
+  now: Date;
 }
 
 export interface SignInAttempt {
@@ -22,7 +28,12 @@ export interface SignInAttempt {
 /** Persistence for sign-in. Holds only hashes of codes and tokens. */
 export interface AuthStore {
   countCodesSince(email: string, since: Date): Promise<number>;
-  saveCode(code: NewSignInCode): Promise<void>;
+  /**
+   * Saves a new code for the email unless it already had 5 in the last 15 minutes, checking and
+   * saving at once so parallel requests can't get past the limit. Each code is created after the
+   * previous one, so the newest is never ambiguous. Returns false when the limit is reached.
+   */
+  issueCode(request: CodeRequest): Promise<boolean>;
   /**
    * Checks the code against the newest one for the email. When it's right and still usable,
    * marks it used, creates the account if needed and saves the session, all at once.
@@ -32,6 +43,11 @@ export interface AuthStore {
   findSessionUser(tokenHash: string, now: Date): Promise<User | null>;
   /** Returns false when there was no such session. */
   deleteSession(tokenHash: string): Promise<boolean>;
+}
+
+/** `now`, or 1 ms after the previous code when that isn't earlier, so codes never share a time. */
+export function nextCodeTime(previous: Date | undefined, now: Date): Date {
+  return previous && previous >= now ? new Date(previous.getTime() + 1) : now;
 }
 
 export function createPostgresAuthStore(db: Database["db"]): AuthStore {
@@ -44,8 +60,36 @@ export function createPostgresAuthStore(db: Database["db"]): AuthStore {
       return row?.count ?? 0;
     },
 
-    async saveCode(code) {
-      await db.insert(signInCodes).values(code);
+    issueCode({ email, codeHash, now }) {
+      return db.transaction(async (tx) => {
+        // One code request per email at a time, until this transaction ends.
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${email}))`);
+
+        const [recent] = await tx
+          .select({ count: count() })
+          .from(signInCodes)
+          .where(
+            and(
+              eq(signInCodes.email, email),
+              gte(signInCodes.createdAt, codeRequestWindowStart(now)),
+            ),
+          );
+        if (!canRequestCode(recent?.count ?? 0)) {
+          return false;
+        }
+
+        const [latest] = await tx
+          .select({ createdAt: signInCodes.createdAt })
+          .from(signInCodes)
+          .where(eq(signInCodes.email, email))
+          .orderBy(desc(signInCodes.createdAt))
+          .limit(1);
+        const createdAt = nextCodeTime(latest?.createdAt, now);
+        await tx
+          .insert(signInCodes)
+          .values({ email, codeHash, createdAt, expiresAt: codeExpiresAt(createdAt) });
+        return true;
+      });
     },
 
     signInWithCode({ email, codeHash, now, session }) {

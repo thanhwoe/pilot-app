@@ -1,5 +1,4 @@
 import {
-  codeExpiresAt,
   errorResponseSchema,
   meResponseSchema,
   sessionExpiresAt,
@@ -128,14 +127,27 @@ describe("POST /auth/code", () => {
     expect((await requestCode("ana@example.com")).statusCode).toBe(204);
   });
 
+  it("answers 429 beyond 5 codes even when requests arrive together", async () => {
+    const { requestCode, sent } = setup();
+
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, () => requestCode("ana@example.com")),
+    );
+
+    expect(responses.map((res) => res.statusCode).sort()).toEqual([
+      ...Array(5).fill(204),
+      ...Array(5).fill(429),
+    ]);
+    expect(sent).toHaveLength(5);
+  });
+
   it("answers the same for an email with an account and one without", async () => {
     const { requestCode, authStore } = setup();
     const createdAt = new Date("2026-10-29T09:00:00Z");
-    await authStore.saveCode({
+    await authStore.issueCode({
       email: "known@example.com",
       codeHash: hashSecret("111111", authSecret),
-      createdAt,
-      expiresAt: codeExpiresAt(createdAt),
+      now: createdAt,
     });
     await authStore.signInWithCode({
       email: "known@example.com",

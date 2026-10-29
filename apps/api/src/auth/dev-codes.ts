@@ -4,7 +4,9 @@ import { z } from "zod";
 
 /** The env vars that decide whether the dev code endpoint exists. Part of `env.ts`. */
 export const devCodesEnvSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  // Any value, so a platform's own NODE_ENV never stops the API. Only the exact values
+  // "development" and "test" turn the dev code endpoint on; unset means off.
+  NODE_ENV: z.string().optional(),
   // Only the exact strings: z.coerce.boolean would read "false" as true.
   DEV_SIGN_IN_CODES: z
     .enum(["true", "false"])
@@ -20,9 +22,12 @@ export interface DevCodes {
   latest(email: string): string | undefined;
 }
 
-/** Dev codes when `DEV_SIGN_IN_CODES` is on, never in production; otherwise undefined. */
+/**
+ * Dev codes when `DEV_SIGN_IN_CODES` is on and `NODE_ENV` is explicitly development or test.
+ * Fails closed: production, any other value and an unset `NODE_ENV` all mean off.
+ */
 export function devCodesFor(env: DevCodesEnv): DevCodes | undefined {
-  if (!env.DEV_SIGN_IN_CODES || env.NODE_ENV === "production") {
+  if (!env.DEV_SIGN_IN_CODES || (env.NODE_ENV !== "development" && env.NODE_ENV !== "test")) {
     return undefined;
   }
   const codes = new Map<string, string>();

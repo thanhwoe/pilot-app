@@ -34,7 +34,7 @@ Before you say a change is done, run `pnpm lint && pnpm typecheck && pnpm test`.
 - **Tests first:** write tests from the issue's Given/When/Then acceptance criteria before the code.
 - **API:** `buildApp(deps)` in `apps/api/src/app.ts` takes its dependencies, so tests call it with `app.inject` and fakes. Only `server.ts` touches the real database and network.
 - **Config:** read env vars through the schema in `apps/api/src/env.ts`. Commit `.env.example`, never `.env`. The API needs `AUTH_SECRET` (at least 32 characters, e.g. `openssl rand -base64 32`).
-- **Sign-in:** there's no email yet; the API writes each sign-in code to its log. For automated UI tests, set `DEV_SIGN_IN_CODES=true` and read the code from `GET /dev/sign-in-code?email=`. That endpoint never answers when `NODE_ENV=production`.
+- **Sign-in:** there's no email yet; the API writes each sign-in code to its log. For automated UI tests, set `DEV_SIGN_IN_CODES=true` and read the code from `GET /dev/sign-in-code?email=`. The endpoint exists only when `NODE_ENV` is set to exactly `development` or `test`; unset or anything else means off.
 - **Next.js:** this version differs from older training data. Read `apps/web/AGENTS.md` and the guides in `node_modules/next/dist/docs/` before changing web code. Keep the generated `AGENTS.md` block committed.
 - **Mobile:** set the API URL with `EXPO_PUBLIC_API_URL`. Without it the app uses `localhost` on iOS and `10.0.2.2` on Android. Give testable elements a `testID` for Maestro.
 - **Dependencies:** pin exact versions, except Expo packages, which follow `npx expo install`.
