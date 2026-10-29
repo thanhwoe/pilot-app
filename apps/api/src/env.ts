@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { devCodesEnvSchema } from "./auth/dev-codes";
 import { databaseEnvSchema } from "./db/database-env";
 
-const envSchema = databaseEnvSchema.extend({
+const envSchema = databaseEnvSchema.extend(devCodesEnvSchema.shape).extend({
   PORT: z.coerce.number().int().positive().default(3001),
   CORS_ORIGINS: z
     .string()
