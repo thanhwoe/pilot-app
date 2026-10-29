@@ -21,15 +21,13 @@ jobs:
           sparse-checkout: .github/scripts
       - name: Mirror the workflow label onto the board
         env:
-          # A classic token with the `project` and `repo` scopes. Fine-grained tokens and
-          # GITHUB_TOKEN can't reach a project owned by a user account.
+          # A classic token with the `project` and `repo` scopes, owned by the board's owner.
+          # Fine-grained tokens and GITHUB_TOKEN can't reach a project owned by a user account.
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_STATE: ${{ github.event.issue.state }}
           ISSUE_LABELS_JSON: ${{ toJSON(github.event.issue.labels.*.name) }}
-          # "@me" is the token's own account. It skips gh's owner-type lookup, which failed in
-          # Actions with "unknown owner type".
-          PROJECT_OWNER: "@me"
           PROJECT_NUMBER: "1"
         run: |
           if [ -z "$GH_TOKEN" ]; then
