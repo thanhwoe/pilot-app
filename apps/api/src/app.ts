@@ -1,6 +1,6 @@
 import cors from "@fastify/cors";
 import type { HealthResponse } from "@gop/shared";
-import Fastify from "fastify";
+import Fastify, { type FastifyServerOptions } from "fastify";
 import { type AuthDeps, registerAuthRoutes } from "./auth/routes";
 
 export interface AppDeps extends Omit<AuthDeps, "now"> {
@@ -9,7 +9,8 @@ export interface AppDeps extends Omit<AuthDeps, "now"> {
   corsOrigins: string[];
   /** Reported by `GET /health`. */
   version: string;
-  logger?: boolean;
+  /** `true` for the default logger, or Fastify logger options (tests pass a stream). */
+  logger?: FastifyServerOptions["logger"];
   /** The clock. Tests pass their own to move time. */
   now?: () => Date;
 }
