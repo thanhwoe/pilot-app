@@ -7,6 +7,8 @@ const envSchema = databaseEnvSchema.extend({
     .string()
     .default("http://localhost:3000")
     .transform((value) => value.split(",").map((origin) => origin.trim())),
+  /** Key for hashing sign-in codes and session tokens. Changing it signs everyone out. */
+  AUTH_SECRET: z.string().min(32),
 });
 
 export type Env = z.infer<typeof envSchema>;

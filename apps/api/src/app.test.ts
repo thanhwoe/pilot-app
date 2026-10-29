@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 import { healthResponseSchema } from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "./app";
+import { createMemoryAuthStore } from "./auth/memory-store";
 import { apiVersion } from "./version";
+
+const authDeps = {
+  authStore: createMemoryAuthStore(),
+  authSecret: "test-secret-that-is-at-least-32-characters",
+  sendSignInCode: async () => {},
+};
 
 const packageVersion: string = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -10,7 +17,12 @@ const packageVersion: string = JSON.parse(
 
 describe("GET /health", () => {
   it("reports ok when the database answers", async () => {
-    const app = buildApp({ pingDb: async () => true, corsOrigins: [], version: "1.2.3" });
+    const app = buildApp({
+      pingDb: async () => true,
+      corsOrigins: [],
+      ...authDeps,
+      version: "1.2.3",
+    });
 
     const res = await app.inject({ method: "GET", url: "/health" });
 
@@ -23,7 +35,12 @@ describe("GET /health", () => {
   });
 
   it("reports degraded when the database is down", async () => {
-    const app = buildApp({ pingDb: async () => false, corsOrigins: [], version: "1.2.3" });
+    const app = buildApp({
+      pingDb: async () => false,
+      corsOrigins: [],
+      ...authDeps,
+      version: "1.2.3",
+    });
 
     const res = await app.inject({ method: "GET", url: "/health" });
 
@@ -32,7 +49,12 @@ describe("GET /health", () => {
   });
 
   it("reports the version from apps/api/package.json", async () => {
-    const app = buildApp({ pingDb: async () => true, corsOrigins: [], version: apiVersion });
+    const app = buildApp({
+      pingDb: async () => true,
+      corsOrigins: [],
+      ...authDeps,
+      version: apiVersion,
+    });
 
     const res = await app.inject({ method: "GET", url: "/health" });
 

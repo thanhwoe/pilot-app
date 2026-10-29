@@ -1,4 +1,5 @@
 import { buildApp } from "./app";
+import { createPostgresAuthStore } from "./auth/store";
 import { createDb } from "./db/client";
 import { env } from "./env";
 import { apiVersion } from "./version";
@@ -9,6 +10,12 @@ const app = buildApp({
   corsOrigins: env.CORS_ORIGINS,
   version: apiVersion,
   logger: true,
+  authStore: createPostgresAuthStore(database.db),
+  authSecret: env.AUTH_SECRET,
+  // No email yet: the code goes to the API log, as the issue asks. Never log session tokens.
+  sendSignInCode: async (email, code, log) => {
+    log.info({ email, code }, "Sign-in code");
+  },
 });
 
 const shutdown = async () => {
