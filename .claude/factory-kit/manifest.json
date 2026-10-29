@@ -1,0 +1,30 @@
+{
+  "source": "thanhwoe/solo-factory plugins/factory-kit",
+  "version": "0.5.0",
+  "commit": "6182aa8",
+  "files": [
+    ".claude/skills/factory-build/SKILL.md",
+    ".claude/skills/factory-check/SKILL.md",
+    ".claude/skills/factory-checkout-branch/SKILL.md",
+    ".claude/skills/factory-commit/SKILL.md",
+    ".claude/skills/factory-create-pr/SKILL.md",
+    ".claude/skills/factory-describe-pr/SKILL.md",
+    ".claude/skills/factory-intake/SKILL.md",
+    ".claude/skills/factory-plan/SKILL.md",
+    ".claude/skills/factory-review/SKILL.md",
+    ".claude/skills/factory-ship/SKILL.md",
+    ".claude/skills/factory-spec/SKILL.md",
+    ".claude/skills/factory-test/SKILL.md",
+    ".claude/skills/factory-update-docs/SKILL.md",
+    ".claude/skills/factory-verify/SKILL.md",
+    ".claude/agents/factory-code-reviewer.md",
+    ".claude/agents/factory-pr-describer.md",
+    ".claude/agents/factory-test-writer.md",
+    ".claude/factory-kit/scripts/format-on-edit.mjs",
+    ".claude/factory-kit/scripts/github-pr.mjs",
+    ".claude/factory-kit/scripts/gitlab-mr.mjs",
+    ".claude/factory-kit/scripts/guard-git.mjs",
+    ".claude/factory-kit/scripts/options.mjs",
+    ".claude/factory-kit/scripts/report-path.mjs"
+  ]
+}
