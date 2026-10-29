@@ -51,3 +51,48 @@ export const devSignInCodeResponseSchema = z.object({
 });
 
 export type DevSignInCodeResponse = z.infer<typeof devSignInCodeResponseSchema>;
+
+const minute = 60_000;
+
+/** A sign-in code works for 10 minutes. */
+export const SIGN_IN_CODE_TTL_MS = 10 * minute;
+/** After this many wrong attempts the code stops working, even with the right digits. */
+export const MAX_CODE_ATTEMPTS = 5;
+/** At most this many codes per email in `CODE_REQUEST_WINDOW_MS`. */
+export const MAX_CODE_REQUESTS = 5;
+export const CODE_REQUEST_WINDOW_MS = 15 * minute;
+/** A session lasts 30 days from sign-in, with no renewal. */
+export const SESSION_TTL_MS = 30 * 24 * 60 * minute;
+
+export interface SignInCodeState {
+  expiresAt: Date;
+  usedAt: Date | null;
+  attempts: number;
+}
+
+export function codeExpiresAt(createdAt: Date): Date {
+  return new Date(createdAt.getTime() + SIGN_IN_CODE_TTL_MS);
+}
+
+/** Whether a code may still be checked. Only the newest code for an email is ever checked. */
+export function isCodeUsable(code: SignInCodeState, now: Date): boolean {
+  return code.usedAt === null && code.attempts < MAX_CODE_ATTEMPTS && now < code.expiresAt;
+}
+
+/** Start of the window in which earlier code requests count against the limit. */
+export function codeRequestWindowStart(now: Date): Date {
+  return new Date(now.getTime() - CODE_REQUEST_WINDOW_MS);
+}
+
+/** Whether another code may be sent, given how many were sent since `codeRequestWindowStart`. */
+export function canRequestCode(recentRequests: number): boolean {
+  return recentRequests < MAX_CODE_REQUESTS;
+}
+
+export function sessionExpiresAt(createdAt: Date): Date {
+  return new Date(createdAt.getTime() + SESSION_TTL_MS);
+}
+
+export function isSessionValid(session: { expiresAt: Date }, now: Date): boolean {
+  return now < session.expiresAt;
+}
