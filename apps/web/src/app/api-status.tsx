@@ -22,7 +22,7 @@ export async function ApiStatus() {
   }
   return (
     <p className={`status ${health.status === "ok" ? "status-ok" : "status-down"}`}>
-      API: {health.status} · DB: {health.db}
+      API: {health.status} · v{health.version} · DB: {health.db}
     </p>
   );
 }

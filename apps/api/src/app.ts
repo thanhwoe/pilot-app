@@ -6,18 +6,20 @@ export interface AppDeps {
   /** Resolves to true when the database is reachable. */
   pingDb: () => Promise<boolean>;
   corsOrigins: string[];
+  /** Reported by `GET /health`. */
+  version: string;
   logger?: boolean;
 }
 
 /** Builds the Fastify app without listening, so tests can call it with `app.inject`. */
-export function buildApp({ pingDb, corsOrigins, logger = false }: AppDeps) {
+export function buildApp({ pingDb, corsOrigins, version, logger = false }: AppDeps) {
   const app = Fastify({ logger });
 
   app.register(cors, { origin: corsOrigins });
 
   app.get("/health", async (): Promise<HealthResponse> => {
     const dbUp = await pingDb();
-    return { status: dbUp ? "ok" : "degraded", db: dbUp ? "up" : "down" };
+    return { status: dbUp ? "ok" : "degraded", db: dbUp ? "up" : "down", version };
   });
 
   return app;
