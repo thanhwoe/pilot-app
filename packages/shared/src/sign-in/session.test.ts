@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "./api";
 import { signInCopy as copy } from "./copy";
+import { signOut } from "./flow";
 import { completeSignIn, restoreSession, type SessionStore } from "./session";
 
 const user = { id: "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f", email: "an@example.com" };
@@ -109,5 +110,36 @@ describe("restoreSession", () => {
     expect(await restoreSession(api, store)).toEqual({ kind: "unavailable" });
     expect(store.delete).not.toHaveBeenCalled();
     expect(await store.get()).toBe("t0ken");
+  });
+});
+
+describe("signOut with a session store", () => {
+  it.each([
+    ["204", vi.fn(async () => ({ ok: true as const, data: null }))],
+    ["401", vi.fn(async () => ({ ok: false as const, error: "unauthorized" as const }))],
+    [
+      "a thrown error",
+      vi.fn(async () => {
+        throw new Error("API down");
+      }),
+    ],
+  ])("sends the stored token to the API, then deletes it after %s", async (_, apiSignOut) => {
+    const store = fakeStore("t0ken");
+
+    await signOut(fakeApi({ signOut: apiSignOut }), (await store.get()) ?? undefined, store.delete);
+
+    expect(apiSignOut).toHaveBeenCalledWith("t0ken");
+    expect(store.delete).toHaveBeenCalledOnce();
+    expect(await store.get()).toBeNull();
+  });
+
+  it("deletes without calling the API when no token is stored", async () => {
+    const store = fakeStore();
+    const api = fakeApi();
+
+    await signOut(api, (await store.get()) ?? undefined, store.delete);
+
+    expect(api.signOut).not.toHaveBeenCalled();
+    expect(store.delete).toHaveBeenCalledOnce();
   });
 });
