@@ -1,5 +1,5 @@
+import type { ApiError, ApiResult, AuthApi } from "@gop/shared";
 import { emailSchema, type MeResponse, signInBodySchema } from "@gop/shared";
-import type { ApiError, ApiResult, AuthApi } from "./api";
 import { copy } from "./copy";
 
 /** What the sign-in page shows. `email` is what the user typed, or the normalized email once valid. */

@@ -1,5 +1,5 @@
+import type { AuthApi } from "@gop/shared";
 import { describe, expect, it, vi } from "vitest";
-import type { AuthApi } from "./api";
 import { copy } from "./copy";
 import { accountState, changeEmail, signOut, submitCode, submitEmail } from "./sign-in-flow";
 
