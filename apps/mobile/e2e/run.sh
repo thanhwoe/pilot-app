@@ -31,8 +31,9 @@ export PATH="$HOME/.maestro/bin:$PATH"
 node "$repo_dir/apps/web/e2e/prepare-db.mts" "$database_url"
 DATABASE_URL="$database_url" pnpm --dir "$repo_dir" --filter @gop/api db:migrate >/dev/null
 
-if curl -sf "$api_url/health" >/dev/null; then
-  echo "Port $api_port is already in use; stop that server first." >&2
+# Refuse to start if anything holds the port, so the cleanup below only ever stops our own API.
+if lsof -ti "tcp:$api_port" -sTCP:LISTEN >/dev/null; then
+  echo "Port $api_port is already in use; stop that process first." >&2
   exit 1
 fi
 DATABASE_URL="$database_url" PORT="$api_port" NODE_ENV=test DEV_SIGN_IN_CODES=true \
