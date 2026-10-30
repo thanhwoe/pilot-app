@@ -1,5 +1,5 @@
-import { emailSchema, signInBodySchema } from "@gop/shared";
-import type { ApiError, AuthApi } from "./api";
+import { emailSchema, type MeResponse, signInBodySchema } from "@gop/shared";
+import type { ApiError, ApiResult, AuthApi } from "./api";
 import { copy } from "./copy";
 
 /** What the sign-in page shows. `email` is what the user typed, or the normalized email once valid. */
@@ -85,4 +85,26 @@ export async function signOut(
   } finally {
     await clearCookie();
   }
+}
+
+/** "Dùng email khác": back to the email step, keeping the email so it can be corrected. */
+export function changeEmail(form: FormData): SignInState {
+  return { step: "email", email: field(form, "email") };
+}
+
+export type AccountState =
+  | { kind: "signed-in"; email: string }
+  | { kind: "unavailable" }
+  | { kind: "clear" };
+
+/**
+ * What the home page shows for the session cookie. `me` is the `GET /me` result, or null when the
+ * cookie holds no token. A rejected or empty session is cleared; when the API is down the session
+ * is kept, and sign-out is still offered because it works without the API.
+ */
+export function accountState(me: ApiResult<MeResponse> | null): AccountState {
+  if (me === null || (!me.ok && me.error === "unauthorized")) {
+    return { kind: "clear" };
+  }
+  return me.ok ? { kind: "signed-in", email: me.data.email } : { kind: "unavailable" };
 }

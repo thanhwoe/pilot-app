@@ -29,14 +29,24 @@ interface Schema<T> {
   safeParse(value: unknown): { success: true; data: T } | { success: false };
 }
 
-export function createAuthApi(baseUrl: string, fetchFn: Fetch = fetch): AuthApi {
+/** How long a call may take before the page shows the connection error instead of waiting. */
+const API_TIMEOUT_MS = 5_000;
+
+export function createAuthApi(
+  baseUrl: string,
+  fetchFn: Fetch = fetch,
+  timeoutMs = API_TIMEOUT_MS,
+): AuthApi {
   async function call<T>(
     path: string,
     init: RequestInit,
     schema: Schema<T> | null,
   ): Promise<ApiResult<T>> {
     try {
-      const res = await fetchFn(`${baseUrl}${path}`, init);
+      const res = await fetchFn(`${baseUrl}${path}`, {
+        ...init,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
       if (res.ok) {
         if (schema === null) {
           return { ok: true, data: null as T };

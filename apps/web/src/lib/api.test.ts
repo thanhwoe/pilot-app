@@ -23,6 +23,7 @@ describe("createAuthApi", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: "an@example.com" }),
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -42,6 +43,7 @@ describe("createAuthApi", () => {
     expect(await api.me("t0ken")).toEqual({ ok: true, data: user });
     expect(fetchFn).toHaveBeenCalledWith("http://api.test/me", {
       headers: { authorization: "Bearer t0ken" },
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -53,6 +55,7 @@ describe("createAuthApi", () => {
     expect(fetchFn).toHaveBeenCalledWith("http://api.test/auth/sign-out", {
       method: "POST",
       headers: { authorization: "Bearer t0ken" },
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -86,6 +89,21 @@ describe("createAuthApi", () => {
     const api = createAuthApi("http://api.test", fetchFn);
 
     expect(await api.signIn({ email: user.email, code: "123456" })).toEqual({
+      ok: false,
+      error: "unavailable",
+    });
+  });
+
+  it("gives up on an API that never answers, and reads it as unavailable", async () => {
+    const hangs = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+    );
+    const api = createAuthApi("http://api.test", hangs, 20);
+
+    expect(await api.requestCode({ email: user.email })).toEqual({
       ok: false,
       error: "unavailable",
     });

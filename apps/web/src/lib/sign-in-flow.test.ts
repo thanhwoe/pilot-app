@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "./api";
 import { copy } from "./copy";
-import { signOut, submitCode, submitEmail } from "./sign-in-flow";
+import { accountState, changeEmail, signOut, submitCode, submitEmail } from "./sign-in-flow";
 
 const user = { id: "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f", email: "an@example.com" };
 
@@ -139,5 +139,39 @@ describe("signOut", () => {
 
     expect(api.signOut).not.toHaveBeenCalled();
     expect(clearCookie).toHaveBeenCalledOnce();
+  });
+});
+
+describe("changeEmail", () => {
+  it("goes back to the email step with the email filled in", () => {
+    expect(changeEmail(form({ email: "an@example.com", code: "12" }))).toEqual({
+      step: "email",
+      email: "an@example.com",
+    });
+  });
+
+  it("goes back to an empty email step when the form has no email", () => {
+    expect(changeEmail(form({}))).toEqual({ step: "email", email: "" });
+  });
+});
+
+describe("accountState", () => {
+  it("shows the email when the API accepts the session", () => {
+    expect(accountState({ ok: true, data: user })).toEqual({
+      kind: "signed-in",
+      email: user.email,
+    });
+  });
+
+  it("clears the cookie when the API rejects the session", () => {
+    expect(accountState({ ok: false, error: "unauthorized" })).toEqual({ kind: "clear" });
+  });
+
+  it("clears the cookie when there is no token to ask about", () => {
+    expect(accountState(null)).toEqual({ kind: "clear" });
+  });
+
+  it("keeps the session, and offers sign-out, when the API can't be reached", () => {
+    expect(accountState({ ok: false, error: "unavailable" })).toEqual({ kind: "unavailable" });
   });
 });

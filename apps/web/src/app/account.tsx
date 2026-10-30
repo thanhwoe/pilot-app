@@ -3,24 +3,26 @@ import { redirect } from "next/navigation";
 import { authApi } from "@/lib/api";
 import { copy } from "@/lib/copy";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
+import { accountState } from "@/lib/sign-in-flow";
 import { signOutAction } from "./actions";
 
 /** Server component: who is signed in, from `GET /me` on every request. */
 export async function Account() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const me = token ? await authApi().me(token) : null;
+  const state = accountState(token ? await authApi().me(token) : null);
 
-  if (me && !me.ok && me.error === "unauthorized") {
-    // Expired, signed out elsewhere or made up: the route handler removes the cookie.
+  if (state.kind === "clear") {
+    // A Server Component can't change cookies; the route handler removes it.
     redirect("/session/clear");
-  }
-  if (!me?.ok) {
-    // The API is down: keep the session, and the API status line below says what's wrong.
-    return <p className="form-error">{copy.unavailable}</p>;
   }
   return (
     <div className="account">
-      <p>{copy.signedInAs(me.data.email)}</p>
+      {state.kind === "signed-in" ? (
+        <p>{copy.signedInAs(state.email)}</p>
+      ) : (
+        // The API is down: keep the session; the API status line below says what's wrong.
+        <p className="form-error">{copy.unavailable}</p>
+      )}
       <form action={signOutAction}>
         <button type="submit">{copy.signOut}</button>
       </form>
