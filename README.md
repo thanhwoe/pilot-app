@@ -17,7 +17,7 @@ pnpm dev
 Sign-in codes are written to the API log; no email is sent yet.
 
 - API: http://localhost:3001/health
-- Web: http://localhost:3000
+- Web: http://localhost:3000 (sends you to `/sign-in`; enter your email, then the code from the API log)
 - Mobile: press `i` (iOS Simulator) or `a` (Android emulator) in the Expo terminal
 
 See [CLAUDE.md](CLAUDE.md) for the layout, commands and rules, and [REVIEW.md](REVIEW.md) for the review checklist.
