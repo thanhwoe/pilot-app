@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { SESSION_COOKIE } from "../src/lib/session-cookie";
 import { sessionCookie, signIn, uniqueEmail } from "./helpers";
-import { API_URL } from "./servers";
+import { API_URL, WEB_URL } from "./servers";
 
 const thirtyDaysInSeconds = 30 * 24 * 60 * 60;
 
@@ -60,4 +61,31 @@ test("AC 12: after signing out, the home page sends me to sign-in", async ({ pag
 
   await expect(page).toHaveURL("/sign-in");
   expect(await sessionCookie(page)).toBeUndefined();
+});
+
+test("[security] AC 16: a cookie the API rejects sends me to sign-in and is removed", async ({
+  page,
+}) => {
+  await page
+    .context()
+    .addCookies([{ name: SESSION_COOKIE, value: "made-up-token", url: WEB_URL, httpOnly: true }]);
+
+  await page.goto("/");
+
+  await expect(page).toHaveURL("/sign-in");
+  await expect(page.getByRole("button", { name: "Gửi mã" })).toBeVisible();
+  expect(await sessionCookie(page)).toBeUndefined();
+});
+
+test("[security] AC 16: clearing the session always redirects to /sign-in, whatever the query", async ({
+  request,
+}) => {
+  const res = await request.get(
+    "/session/clear?next=https://evil.example/&redirect=//evil.example/&returnTo=/elsewhere",
+    { maxRedirects: 0 },
+  );
+
+  expect(res.status()).toBe(307);
+  expect(new URL(res.headers().location, WEB_URL).toString()).toBe(`${WEB_URL}/sign-in`);
+  expect(res.headers()["set-cookie"]).toContain(`${SESSION_COOKIE}=;`);
 });
