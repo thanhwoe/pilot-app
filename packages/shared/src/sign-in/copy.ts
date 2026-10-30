@@ -1,5 +1,5 @@
-/** The sign-in UI text. Tests check these exact strings. */
-export const copy = {
+/** The sign-in UI text for web and mobile. Tests check these exact strings. */
+export const signInCopy = {
   emailHeading: "Đăng nhập",
   sendCode: "Gửi mã",
   codePrompt: (email: string) => `Nhập mã 6 số đã gửi tới ${email}`,

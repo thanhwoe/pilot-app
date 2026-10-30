@@ -1,9 +1,8 @@
+import { accountState, signInCopy as copy } from "@gop/shared";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authApi } from "@/lib/api";
-import { copy } from "@/lib/copy";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
-import { accountState } from "@/lib/sign-in-flow";
 import { signOutAction } from "./actions";
 
 /** Server component: who is signed in, from `GET /me` on every request. */

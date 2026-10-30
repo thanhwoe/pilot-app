@@ -1,5 +1,5 @@
+import { signInCopy as copy } from "@gop/shared";
 import type { Metadata } from "next";
-import { copy } from "@/lib/copy";
 import { SignInForm } from "./sign-in-form";
 
 export const metadata: Metadata = {

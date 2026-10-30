@@ -1,8 +1,7 @@
 "use client";
 
+import { signInCopy as copy, type SignInState } from "@gop/shared";
 import { useActionState } from "react";
-import { copy } from "@/lib/copy";
-import type { SignInState } from "@/lib/sign-in-flow";
 import { signInAction } from "./actions";
 
 const initialState: SignInState = { step: "email" };
