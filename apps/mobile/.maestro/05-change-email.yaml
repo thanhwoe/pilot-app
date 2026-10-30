@@ -1,0 +1,15 @@
+# AC 5: "Dùng email khác" goes back to the email step.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/request-code.yaml
+- tapOn:
+    id: change-email
+    text: Dùng email khác
+- assertVisible:
+    id: email-input
+- assertVisible:
+    id: send-code
+- assertNotVisible:
+    id: code-input

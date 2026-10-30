@@ -1,0 +1,8 @@
+# Types ${output.email} on the email step and asks for a code.
+appId: com.thanhwoe.gop
+---
+- tapOn:
+    id: email-input
+- inputText: ${output.email}
+- tapOn:
+    id: send-code

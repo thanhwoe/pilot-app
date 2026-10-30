@@ -1,0 +1,10 @@
+# AC 2: a valid email asks the API for a code, and the screen asks for the code sent to it.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/request-code.yaml
+- assertVisible: Nhập mã 6 số đã gửi tới ${output.email}
+- assertVisible:
+    id: code-input
+- runScript: scripts/dev-code.js
