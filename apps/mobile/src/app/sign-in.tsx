@@ -56,6 +56,7 @@ export default function SignIn() {
             autoCorrect={false}
             keyboardType="email-address"
             textContentType="emailAddress"
+            editable={!pending}
           />
         </>
       ) : (
@@ -71,6 +72,7 @@ export default function SignIn() {
             autoComplete="one-time-code"
             textContentType="oneTimeCode"
             maxLength={6}
+            editable={!pending}
           />
         </>
       )}
@@ -82,7 +84,7 @@ export default function SignIn() {
       {state.step === "email" ? (
         <Pressable
           testID="send-code"
-          style={styles.button}
+          style={[styles.button, pending && styles.busy]}
           disabled={pending}
           onPress={() => run(() => submitEmail(authApi, { email }))}
         >
@@ -92,7 +94,7 @@ export default function SignIn() {
         <>
           <Pressable
             testID="sign-in"
-            style={styles.button}
+            style={[styles.button, pending && styles.busy]}
             disabled={pending}
             onPress={() => submitCode(state.email)}
           >
@@ -115,4 +117,5 @@ const styles = StyleSheet.create({
   button: { alignSelf: "flex-start", backgroundColor: "#171717", borderRadius: 6, padding: 12 },
   buttonText: { color: "#fff", fontSize: 16 },
   link: { textDecorationLine: "underline", fontSize: 16 },
+  busy: { opacity: 0.5 },
 });

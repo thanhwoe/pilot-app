@@ -1,9 +1,9 @@
 import {
   type AccountState,
   completeSignIn,
-  signOut as endSession,
   restoreSession,
   type SignInState,
+  signOutSession,
 } from "@gop/shared";
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { authApi } from "./api";
@@ -13,9 +13,9 @@ export type SessionState = { kind: "loading" } | AccountState;
 
 interface Session {
   state: SessionState;
-  /** Code step: on success the token is stored and the session is read back from `GET /me`. */
+  /** Code step: on success the token is stored and the app shows home with the email. */
   signIn(values: { email: string; code: string }): Promise<SignInState | { signedIn: true }>;
-  /** Ends the session on the API and deletes the token, even when the API is down. */
+  /** Ends the session on the API and deletes the token, even when the API or storage fails. */
   signOut(): Promise<void>;
 }
 
@@ -31,14 +31,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   async function signIn(values: { email: string; code: string }) {
     const outcome = await completeSignIn(authApi, store, values);
     if ("signedIn" in outcome) {
-      setState(await restoreSession(authApi, store));
+      setState({ kind: "signed-in", email: outcome.email });
+      return { signedIn: true as const };
     }
     return outcome;
   }
 
   async function signOut() {
-    await endSession(authApi, (await store.get()) ?? undefined, store.delete);
-    setState({ kind: "clear" });
+    try {
+      await signOutSession(authApi, store);
+    } finally {
+      setState({ kind: "clear" });
+    }
   }
 
   return <SessionContext value={{ state, signIn, signOut }}>{children}</SessionContext>;

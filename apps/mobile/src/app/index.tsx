@@ -9,6 +9,7 @@ type State = { kind: "loading" } | { kind: "ok"; health: HealthResponse } | { ki
 export default function Home() {
   const { state: session, signOut } = useSession();
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     fetchHealth()
@@ -28,7 +29,17 @@ export default function Home() {
           {copy.unavailable}
         </Text>
       )}
-      <Pressable testID="sign-out" style={styles.button} onPress={signOut}>
+      <Pressable
+        testID="sign-out"
+        style={[styles.button, signingOut && styles.busy]}
+        disabled={signingOut}
+        accessibilityState={{ busy: signingOut, disabled: signingOut }}
+        onPress={() => {
+          // With the API down this waits for the timeout; one tap is enough.
+          setSigningOut(true);
+          signOut();
+        }}
+      >
         <Text style={styles.buttonText}>{copy.signOut}</Text>
       </Pressable>
       <Text testID="api-status" style={styles.status}>
@@ -47,4 +58,5 @@ const styles = StyleSheet.create({
   error: { color: "#cf222e" },
   button: { alignSelf: "flex-start", backgroundColor: "#171717", borderRadius: 6, padding: 12 },
   buttonText: { color: "#fff", fontSize: 16 },
+  busy: { opacity: 0.5 },
 });
