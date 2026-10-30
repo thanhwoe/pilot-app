@@ -12,17 +12,20 @@ export function uniqueEmail(testInfo: TestInfo): string {
   return `e2e-${testInfo.testId}-${randomBytes(4).toString("hex")}@example.test`;
 }
 
+function fetchDevCode(email: string): Promise<Response> {
+  return fetch(`${API_URL}/dev/sign-in-code?email=${encodeURIComponent(email)}`);
+}
+
 /** The latest code the API sent to `email`, from the dev code endpoint. */
 export async function devCode(email: string): Promise<string> {
-  const res = await fetch(`${API_URL}/dev/sign-in-code?email=${encodeURIComponent(email)}`);
+  const res = await fetchDevCode(email);
   expect(res.status, `no code was sent to ${email}`).toBe(200);
   return devSignInCodeResponseSchema.parse(await res.json()).code;
 }
 
 /** Whether the API has sent any code to `email`. */
 export async function hasDevCode(email: string): Promise<boolean> {
-  const res = await fetch(`${API_URL}/dev/sign-in-code?email=${encodeURIComponent(email)}`);
-  return res.status === 200;
+  return (await fetchDevCode(email)).status === 200;
 }
 
 /** Calls the API directly, bypassing the web, to set up a state such as a rate limit. */

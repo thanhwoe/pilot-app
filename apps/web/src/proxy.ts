@@ -6,8 +6,8 @@ import { SESSION_COOKIE } from "./lib/session-cookie";
  * API: the home page's `GET /me` decides whether the session is valid.
  */
 export function proxy(request: NextRequest) {
-  // Server Actions post to the page they live on; never redirect those.
-  if (request.method !== "GET") {
+  // Server Actions post to the page they live on; redirect page loads only, never those.
+  if (request.method !== "GET" && request.method !== "HEAD") {
     return NextResponse.next();
   }
   const hasSession = request.cookies.has(SESSION_COOKIE);
