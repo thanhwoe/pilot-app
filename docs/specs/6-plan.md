@@ -1,6 +1,6 @@
 # Plan: Sign in on the web with an email one-time code
 
-Issue: #6 · Spec: [6.md](6.md) · Runs on: `cloud` · Status: waiting for gate 2
+Issue: #6 · Spec: [6.md](6.md) · Runs on: `cloud, then mac` · Status: waiting for gate 2
 
 ## Contracts
 
@@ -102,6 +102,8 @@ The E2E API uses its own database, `gop_e2e`, which is created if missing and mi
 
 Each step writes its test first, sees it fail, then makes it pass, and leaves `pnpm lint && pnpm typecheck && pnpm test` green.
 
+**Routing changed after gate 2 (developer's decision):** steps 1–3 (unit tests) run in the cloud. Steps 4–10 (Playwright and the CI job) run on the Mac mini, because the cloud environment's default network allowlist likely blocks Playwright's browser download. A cloud session runs steps 1–3, pushes, and hands over. The Mac mini continues with `/factory-build 6 --from 4`, starting the API with `pnpm db:up` and Postgres locally.
+
 1. `cloud` · AC 14, 15 (unit) · **plumbing + first test:** add Vitest to `apps/web` and a `test` script, so `pnpm test` runs the web unit tests. Test first: `sessionCookieOptions("production")` has `httpOnly`, `sameSite: "lax"`, `secure: true`, `path: "/"` and a 30-day `maxAge`; with `"development"`, `"test"` or `undefined`, `secure` is false. Then `session-cookie.ts` · done when `pnpm --filter @gop/web test` passes.
 2. `cloud` · AC 6, 8, 17 (unit) · Tests first, with a fake API:
    - an invalid email returns the invalid-email error and never calls `requestCode`;
@@ -112,34 +114,34 @@ Each step writes its test first, sees it fail, then makes it pass, and leaves `p
 
    Then `api.ts`, `copy.ts` and `sign-in-flow.ts` · done when `pnpm --filter @gop/web test` passes.
 3. `cloud` · AC 13 (unit) · Tests first: `signOut` clears the cookie when the API answers 204, 401 or throws. Then `signOut` in `sign-in-flow.ts` · done when `pnpm --filter @gop/web test` passes.
-4. `cloud` · AC 1 · **plumbing + first E2E:** Playwright config, `prepare-db.ts`, `helpers.ts` (including `uniqueEmail`) and the `test:e2e` script. Test first: signed out, `/` lands on `/sign-in` with the email field and "Gửi mã". Then the proxy's no-cookie branch and the sign-in page with the email step · done when `pnpm --filter @gop/web test:e2e` passes.
-5. `cloud` · AC 2, 6, 7 · E2E first, each test with its own email:
+4. `mac` · AC 1 · **plumbing + first E2E:** Playwright config, `prepare-db.ts`, `helpers.ts` (including `uniqueEmail`) and the `test:e2e` script. Test first: signed out, `/` lands on `/sign-in` with the email field and "Gửi mã". Then the proxy's no-cookie branch and the sign-in page with the email step · done when `pnpm --filter @gop/web test:e2e` passes.
+5. `mac` · AC 2, 6, 7 · E2E first, each test with its own email:
    - a valid email shows "Nhập mã 6 số đã gửi tới <email>", and `GET /dev/sign-in-code` has a code for it;
    - "not-an-email" shows "Email không hợp lệ." and stays on the email step;
    - after 5 code requests made straight to the API, a 6th through the page shows the too-many-requests copy.
 
    Then the email-step Server Action · done when `test:e2e` passes.
-6. `cloud` · AC 3, 4, 5, 9 · E2E first:
+6. `mac` · AC 3, 4, 5, 9 · E2E first:
    - the dev code signs in and lands on `/`, which shows "Đã đăng nhập: <email>";
    - a wrong code shows the wrong-code copy on the code step and sets no cookie;
    - "Dùng email khác" returns to the email step.
 
    Then the code-step action (set cookie, `redirect("/")`), `account.tsx` and the `page.tsx` changes · done when `test:e2e` passes.
-7. `cloud` · [security] AC 14, 15, 17, 18 (E2E) · E2E first:
+7. `mac` · [security] AC 14, 15, 17, 18 (E2E) · E2E first:
    - after sign-in, the `gop_session` cookie is `httpOnly`, `sameSite: "Lax"` and `secure: true` (the server is `next start`, so `NODE_ENV=production`);
    - the cookie's expiry is 30 days from now, give or take a minute;
    - a 5-digit code shows "Mã gồm 6 chữ số." and sets no cookie;
    - after 5 wrong codes sent straight to the API, the right code through the page shows the wrong-code copy and sets no cookie.
 
    Code should already pass. A test that passes before any change still has to fail when its behaviour is broken: check that by flipping the option or the check once, locally · done when `test:e2e` passes.
-8. `cloud` · AC 10, 11, 12 · E2E first:
+8. `mac` · AC 10, 11, 12 · E2E first:
    - signed in, `/sign-in` lands on `/`;
    - signing out lands on `/sign-in`, and the token read from the cookie before sign-out now gets 401 from the API's `GET /me`;
    - after sign-out, `/` lands on `/sign-in` and the cookie is gone.
 
    Then the proxy's cookie branch for `/sign-in`, the sign-out action and the form · done when `test:e2e` passes.
-9. `cloud` · [security] AC 16 · E2E first: a made-up `gop_session` cookie on `/` lands on `/sign-in`, and the cookie is gone. Then the 401 branch in `account.tsx` and `session/clear/route.ts` · done when `test:e2e` passes.
-10. `cloud` · **plumbing:** CI and docs. Add the `e2e` job to `.github/workflows/ci.yml`, next to `check` and with the same Postgres service. It runs `pnpm exec playwright install --with-deps chromium` and `pnpm --filter @gop/web test:e2e`, and uploads `playwright-report/` when it fails. Also add the command to `CLAUDE.md` and the ignores to `.gitignore` · done when CI's `check` and `e2e` jobs are green on the PR.
+9. `mac` · [security] AC 16 · E2E first: a made-up `gop_session` cookie on `/` lands on `/sign-in`, and the cookie is gone. Then the 401 branch in `account.tsx` and `session/clear/route.ts` · done when `test:e2e` passes.
+10. `mac` · **plumbing:** CI and docs. Add the `e2e` job to `.github/workflows/ci.yml`, next to `check` and with the same Postgres service. It runs `pnpm exec playwright install --with-deps chromium` and `pnpm --filter @gop/web test:e2e`, and uploads `playwright-report/` when it fails. Also add the command to `CLAUDE.md` and the ignores to `.gitignore` · done when CI's `check` and `e2e` jobs are green on the PR.
 
 ## Verification
 
