@@ -66,3 +66,23 @@ export async function submitCode(api: AuthApi, form: FormData): Promise<CodeOutc
   }
   return { signedIn: true, token: result.data.token };
 }
+
+/**
+ * Ends the session on the API, then clears the cookie whatever the API answered: someone who asks
+ * to sign out must end up signed out in this browser, even when the API is down.
+ */
+export async function signOut(
+  api: AuthApi,
+  token: string | undefined,
+  clearCookie: () => void | Promise<void>,
+): Promise<void> {
+  try {
+    if (token) {
+      await api.signOut(token);
+    }
+  } catch {
+    // The session then lasts until it expires on the API; the browser no longer holds its token.
+  } finally {
+    await clearCookie();
+  }
+}
