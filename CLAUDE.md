@@ -58,6 +58,8 @@ Never edit `.claude/skills/factory-*`, `.claude/agents/factory-*` or `.claude/fa
 - **Cloud session (Linux):** API, `packages/shared`, web, unit tests, specs and plans.
 - **Mac mini:** anything that needs the iOS Simulator, the Android emulator, Xcode or Maestro.
 - Each issue's plan tags it `cloud` or `mac`.
+- **CI:** GitHub-hosted `ubuntu-latest` runs `check` and `e2e`. A self-hosted runner on the Mac mini, labelled `macos-sim` (Apple M1, 16 GB of RAM), can run jobs that need the iOS Simulator, the Android emulator or Maestro, with no GitHub macOS minutes. It is free but small: run one simulator or emulator at a time. A job there must not overlap a mobile build session on the same machine.
+- **Cloud network:** the cloud environment's default allowlist may block Playwright's browser download, so Playwright steps run on the Mac mini or in CI.
 
 ## Definition of done
 
