@@ -1,0 +1,16 @@
+# [security] AC 15: after sign-in, the session token is never shown on screen. Maestro can't read
+# secure storage, so this looks for the token's shape: the API makes it from 32 random bytes,
+# 43 characters of base64url. The shared unit tests prove the token only goes to the store.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- assertNotVisible:
+    text: ".*[A-Za-z0-9_-]{43}.*"
+- stopApp
+- launchApp
+- assertVisible:
+    id: signed-in-email
+- assertNotVisible:
+    text: ".*[A-Za-z0-9_-]{43}.*"

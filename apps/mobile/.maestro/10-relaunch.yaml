@@ -1,0 +1,11 @@
+# AC 10: after I close and reopen the app, I'm still signed in.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- stopApp
+- launchApp
+- assertVisible:
+    id: signed-in-email
+    text: "Đã đăng nhập: ${output.email}"

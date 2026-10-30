@@ -1,21 +1,28 @@
 "use server";
 
+import { changeEmail, type SignInState, submitCode, submitEmail } from "@gop/shared";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authApi } from "@/lib/api";
 import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session-cookie";
-import { changeEmail, type SignInState, submitCode, submitEmail } from "@/lib/sign-in-flow";
+
+/** A form field as a string; a missing or file field reads as empty, which the schemas reject. */
+function field(form: FormData, name: string): string {
+  const value = form.get(name);
+  return typeof value === "string" ? value : "";
+}
 
 /** The one action behind the sign-in form. The form's `step` field says which step was submitted. */
 export async function signInAction(_previous: SignInState, form: FormData): Promise<SignInState> {
+  const email = field(form, "email");
   if (form.get("intent") === "change-email") {
-    return changeEmail(form);
+    return changeEmail(email);
   }
   if (form.get("step") !== "code") {
-    return submitEmail(authApi(), form);
+    return submitEmail(authApi(), { email });
   }
 
-  const outcome = await submitCode(authApi(), form);
+  const outcome = await submitCode(authApi(), { email, code: field(form, "code") });
   if (!("signedIn" in outcome)) {
     return outcome;
   }

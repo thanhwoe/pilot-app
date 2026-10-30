@@ -1,0 +1,16 @@
+# AC 13: after signing out, closing and reopening the app still shows sign-in.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- tapOn:
+    id: sign-out
+- assertVisible:
+    id: email-input
+- stopApp
+- launchApp
+- assertVisible:
+    id: email-input
+- assertNotVisible:
+    id: signed-in-email

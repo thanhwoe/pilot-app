@@ -108,4 +108,14 @@ describe("createAuthApi", () => {
       error: "unavailable",
     });
   });
+
+  it("works where AbortSignal.timeout doesn't exist, as in React Native", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => {
+      throw new TypeError("AbortSignal.timeout is not a function");
+    });
+    const api = createAuthApi("http://api.test", fakeFetch(204));
+
+    expect(await api.requestCode({ email: user.email })).toEqual({ ok: true, data: null });
+    timeout.mockRestore();
+  });
 });

@@ -1,0 +1,4 @@
+# A fresh email for this flow: the API limits codes and attempts per email.
+appId: com.thanhwoe.gop
+---
+- evalScript: ${output.email = 'm-' + Date.now() + '-' + Math.floor(Math.random() * 1000000) + '@example.test'}

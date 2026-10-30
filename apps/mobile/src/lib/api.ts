@@ -1,4 +1,4 @@
-import { type HealthResponse, healthResponseSchema } from "@gop/shared";
+import { createAuthApi, type HealthResponse, healthResponseSchema } from "@gop/shared";
 import { Platform } from "react-native";
 
 // The Android emulator reaches the host machine at 10.0.2.2, not localhost.
@@ -10,3 +10,6 @@ export async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch(`${apiUrl}/health`);
   return healthResponseSchema.parse(await res.json());
 }
+
+/** The #5 auth endpoints, through the client the web uses too. */
+export const authApi = createAuthApi(apiUrl);

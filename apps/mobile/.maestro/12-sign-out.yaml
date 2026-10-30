@@ -1,0 +1,14 @@
+# AC 12: signing out shows sign-in. That it ends the session on the server is proven by the
+# shared unit tests (the stored token goes to POST /auth/sign-out) and #5's API test.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- tapOn:
+    id: sign-out
+    text: Đăng xuất
+- assertVisible:
+    id: email-input
+- assertNotVisible:
+    id: signed-in-email

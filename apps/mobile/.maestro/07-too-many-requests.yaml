@@ -1,0 +1,15 @@
+# AC 7: a 6th code request for one email within 15 minutes shows the too-many-requests error.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runScript:
+    file: scripts/request-codes.js
+    env:
+      COUNT: 5
+- runFlow: subflows/request-code.yaml
+- assertVisible:
+    id: form-error
+    text: Bạn đã yêu cầu quá nhiều mã. Hãy thử lại sau 15 phút.
+- assertNotVisible:
+    id: code-input

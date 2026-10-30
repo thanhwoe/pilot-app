@@ -1,0 +1,18 @@
+# [security] AC 17: a code that isn't exactly 6 digits shows an error and doesn't sign in.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/request-code.yaml
+- tapOn:
+    id: code-input
+- inputText: "12345"
+- tapOn:
+    id: sign-in
+- assertVisible:
+    id: form-error
+    text: Mã gồm 6 chữ số.
+- assertVisible:
+    id: code-input
+- assertNotVisible:
+    id: signed-in-email

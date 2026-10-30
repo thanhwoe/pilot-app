@@ -1,0 +1,12 @@
+# AC 6: an invalid email shows an error, stays on the email step and requests no code.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- evalScript: ${output.email = 'not-an-email'}
+- runFlow: subflows/request-code.yaml
+- assertVisible:
+    id: form-error
+    text: Email không hợp lệ.
+- assertNotVisible:
+    id: code-input
+- runScript: scripts/no-dev-code.js

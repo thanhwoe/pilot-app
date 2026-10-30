@@ -1,0 +1,10 @@
+# A fresh install: no app data and, on iOS, no stored session (the keychain survives clearState).
+appId: com.thanhwoe.gop
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - clearKeychain
+- launchApp:
+    clearState: true
