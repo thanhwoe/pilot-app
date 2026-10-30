@@ -1,11 +1,13 @@
-import type { HealthResponse } from "@gop/shared";
+import { signInCopy as copy, type HealthResponse } from "@gop/shared";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
+import { useSession } from "@/lib/session";
 
 type State = { kind: "loading" } | { kind: "ok"; health: HealthResponse } | { kind: "error" };
 
 export default function Home() {
+  const { state: session } = useSession();
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
@@ -18,6 +20,9 @@ export default function Home() {
     <View style={styles.container}>
       <Text style={styles.title}>Góp</Text>
       <Text>Chia tiền nhóm, biết ai nợ ai.</Text>
+      {session.kind === "signed-in" && (
+        <Text testID="signed-in-email">{copy.signedInAs(session.email)}</Text>
+      )}
       <Text testID="api-status" style={styles.status}>
         {state.kind === "loading" && "Đang kiểm tra API…"}
         {state.kind === "ok" && `API: ${state.health.status} · DB: ${state.health.db}`}

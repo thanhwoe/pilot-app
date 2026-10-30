@@ -1,0 +1,14 @@
+# Signs in as ${output.email} with the code from the dev endpoint, and waits for home.
+appId: com.thanhwoe.gop
+---
+- runFlow: request-code.yaml
+- assertVisible:
+    id: code-input
+- runScript: ../scripts/dev-code.js
+- tapOn:
+    id: code-input
+- inputText: ${output.code}
+- tapOn:
+    id: sign-in
+- assertVisible:
+    id: signed-in-email

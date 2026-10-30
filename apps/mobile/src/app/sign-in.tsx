@@ -2,8 +2,10 @@ import { changeEmail, signInCopy as copy, type SignInState, submitEmail } from "
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { authApi } from "@/lib/api";
+import { useSession } from "@/lib/session";
 
 export default function SignIn() {
+  const session = useSession();
   const [state, setState] = useState<SignInState>({ step: "email" });
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -13,6 +15,19 @@ export default function SignIn() {
     setPending(true);
     try {
       setState(await action());
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitCode(email: string) {
+    setPending(true);
+    try {
+      const outcome = await session.signIn({ email, code });
+      // On success the session changes and the guard in _layout shows home.
+      if (!("signedIn" in outcome)) {
+        setState(outcome);
+      }
     } finally {
       setPending(false);
     }
@@ -75,7 +90,12 @@ export default function SignIn() {
         </Pressable>
       ) : (
         <>
-          <Pressable testID="sign-in" style={styles.button} disabled={pending}>
+          <Pressable
+            testID="sign-in"
+            style={styles.button}
+            disabled={pending}
+            onPress={() => submitCode(state.email)}
+          >
             <Text style={styles.buttonText}>{copy.signIn}</Text>
           </Pressable>
           <Pressable testID="change-email" disabled={pending} onPress={backToEmail}>

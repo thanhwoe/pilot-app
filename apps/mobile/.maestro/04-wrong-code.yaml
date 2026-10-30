@@ -1,0 +1,20 @@
+# AC 4: a wrong code keeps me signed out on the code step, with the wrong-code error.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/request-code.yaml
+- runScript: scripts/dev-code.js
+- evalScript: "${output.wrong = output.code === '000000' ? '111111' : '000000'}"
+- tapOn:
+    id: code-input
+- inputText: ${output.wrong}
+- tapOn:
+    id: sign-in
+- assertVisible:
+    id: form-error
+    text: Mã không đúng hoặc đã hết hạn. Hãy thử lại hoặc yêu cầu mã mới.
+- assertVisible:
+    id: code-input
+- assertNotVisible:
+    id: signed-in-email
