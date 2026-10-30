@@ -1,0 +1,9 @@
+# AC 1: signed out, the app opens on sign-in, which asks for my email.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- assertVisible:
+    id: email-input
+- assertVisible:
+    id: send-code
+    text: Gửi mã
