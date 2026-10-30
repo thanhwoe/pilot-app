@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Account } from "./account";
 import { ApiStatus } from "./api-status";
 
 export default function Home() {
@@ -6,6 +7,9 @@ export default function Home() {
     <main className="home">
       <h1>Góp</h1>
       <p>Chia tiền nhóm, biết ai nợ ai.</p>
+      <Suspense fallback={<p className="status">Đang tải tài khoản…</p>}>
+        <Account />
+      </Suspense>
       <Suspense fallback={<p className="status">Đang kiểm tra API…</p>}>
         <ApiStatus />
       </Suspense>

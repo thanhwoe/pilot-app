@@ -49,6 +49,18 @@ export function SignInForm() {
       <button type="submit" disabled={pending}>
         {state.step === "email" ? copy.sendCode : copy.signIn}
       </button>
+      {state.step === "code" && (
+        <button
+          type="submit"
+          className="link-button"
+          name="intent"
+          value="change-email"
+          formNoValidate
+          disabled={pending}
+        >
+          {copy.useAnotherEmail}
+        </button>
+      )}
     </form>
   );
 }
