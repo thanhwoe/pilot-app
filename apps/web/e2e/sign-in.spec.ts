@@ -1,6 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
-import { SESSION_COOKIE } from "../src/lib/session-cookie";
-import { apiPost, devCode, hasDevCode, uniqueEmail } from "./helpers";
+import { expect, test } from "@playwright/test";
+import { apiPost, devCode, goToCodeStep, hasDevCode, sessionCookie, uniqueEmail } from "./helpers";
 
 test("AC 1: signed out, the home page sends me to sign-in, which asks for my email", async ({
   page,
@@ -57,17 +56,6 @@ test("AC 7: a 6th code request in 15 minutes shows the too-many-requests error",
   await expect(page.getByRole("button", { name: "Gửi mã" })).toBeVisible();
 });
 
-async function goToCodeStep(page: Page, email: string) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Gửi mã" }).click();
-  await expect(page.getByLabel("Mã")).toBeVisible();
-}
-
-async function sessionCookie(page: Page) {
-  return (await page.context().cookies()).find((cookie) => cookie.name === SESSION_COOKIE);
-}
-
 test("AC 3, 9: the right code signs me in, and home shows my email", async ({ page }, testInfo) => {
   const email = uniqueEmail(testInfo);
   await goToCodeStep(page, email);
@@ -107,4 +95,41 @@ test("AC 5: 'use another email' goes back to the email step", async ({ page }, t
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByRole("button", { name: "Gửi mã" })).toBeVisible();
   await expect(page.getByLabel("Mã")).toHaveCount(0);
+});
+
+test("[security] AC 17: a code that isn't 6 digits shows an error and doesn't sign in", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  await goToCodeStep(page, email);
+  const code = await devCode(email);
+
+  await page.getByLabel("Mã").fill(code.slice(0, 5));
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText("Mã gồm 6 chữ số.");
+  expect(await sessionCookie(page)).toBeUndefined();
+  // No sign-in was attempted, so the code still works through the API.
+  expect((await apiPost("/auth/sign-in", { email, code })).status).toBe(200);
+});
+
+test("[security] AC 18: after 5 wrong codes even the right code is rejected", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  await goToCodeStep(page, email);
+  const code = await devCode(email);
+  const wrong = code === "000000" ? "111111" : "000000";
+  for (let i = 0; i < 5; i++) {
+    expect((await apiPost("/auth/sign-in", { email, code: wrong })).status).toBe(401);
+  }
+
+  await page.getByLabel("Mã").fill(code);
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText(
+    "Mã không đúng hoặc đã hết hạn. Hãy thử lại hoặc yêu cầu mã mới.",
+  );
+  await expect(page).toHaveURL("/sign-in");
+  expect(await sessionCookie(page)).toBeUndefined();
 });

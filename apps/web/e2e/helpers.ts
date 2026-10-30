@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { devSignInCodeResponseSchema } from "@gop/shared";
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import { SESSION_COOKIE } from "../src/lib/session-cookie";
 import { API_URL } from "./servers";
 
 /**
@@ -35,10 +36,21 @@ export function apiPost(path: string, body: unknown): Promise<Response> {
 
 /** Signs in through the page with a fresh code, and waits for the signed-in home. */
 export async function signIn(page: Page, email: string): Promise<void> {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Gửi mã" }).click();
+  await goToCodeStep(page, email);
   await page.getByLabel("Mã").fill(await devCode(email));
   await page.getByRole("button", { name: "Đăng nhập" }).click();
   await expect(page).toHaveURL("/");
+}
+
+/** Opens sign-in and submits `email`, landing on the code step. */
+export async function goToCodeStep(page: Page, email: string): Promise<void> {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Gửi mã" }).click();
+  await expect(page.getByLabel("Mã")).toBeVisible();
+}
+
+/** The session cookie as the browser holds it, or undefined. */
+export async function sessionCookie(page: Page) {
+  return (await page.context().cookies()).find((cookie) => cookie.name === SESSION_COOKIE);
 }
