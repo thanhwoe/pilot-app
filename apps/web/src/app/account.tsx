@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { authApi } from "@/lib/api";
 import { copy } from "@/lib/copy";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
+import { signOutAction } from "./actions";
 
 /** Server component: who is signed in, from `GET /me` on every request. */
 export async function Account() {
@@ -11,5 +12,12 @@ export async function Account() {
   if (!me?.ok) {
     return <p className="form-error">{copy.unavailable}</p>;
   }
-  return <p className="account">{copy.signedInAs(me.data.email)}</p>;
+  return (
+    <div className="account">
+      <p>{copy.signedInAs(me.data.email)}</p>
+      <form action={signOutAction}>
+        <button type="submit">{copy.signOut}</button>
+      </form>
+    </div>
+  );
 }
