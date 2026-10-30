@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "./api";
 import { signInCopy as copy } from "./copy";
-import { completeSignIn, type SessionStore } from "./session";
+import { completeSignIn, restoreSession, type SessionStore } from "./session";
 
 const user = { id: "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f", email: "an@example.com" };
 
@@ -68,5 +68,46 @@ describe("completeSignIn", () => {
     expect(
       await completeSignIn(api, fakeStore(), { email: "an@example.com", code: "123456" }),
     ).toEqual({ step: "code", email: "an@example.com", error: copy.wrongCode });
+  });
+});
+
+describe("restoreSession", () => {
+  it("shows sign-in without asking the API when no token is stored", async () => {
+    const api = fakeApi();
+
+    expect(await restoreSession(api, fakeStore())).toEqual({ kind: "clear" });
+    expect(api.me).not.toHaveBeenCalled();
+  });
+
+  it("shows the email when the API accepts the stored token", async () => {
+    const api = fakeApi();
+
+    expect(await restoreSession(api, fakeStore("t0ken"))).toEqual({
+      kind: "signed-in",
+      email: user.email,
+    });
+    expect(api.me).toHaveBeenCalledWith("t0ken");
+  });
+
+  it("[security] deletes a stored token the API rejects", async () => {
+    const store = fakeStore("expired-token");
+    const api = fakeApi({
+      me: vi.fn(async () => ({ ok: false as const, error: "unauthorized" as const })),
+    });
+
+    expect(await restoreSession(api, store)).toEqual({ kind: "clear" });
+    expect(store.delete).toHaveBeenCalledOnce();
+    expect(await store.get()).toBeNull();
+  });
+
+  it("keeps the token when the API can't be reached", async () => {
+    const store = fakeStore("t0ken");
+    const api = fakeApi({
+      me: vi.fn(async () => ({ ok: false as const, error: "unavailable" as const })),
+    });
+
+    expect(await restoreSession(api, store)).toEqual({ kind: "unavailable" });
+    expect(store.delete).not.toHaveBeenCalled();
+    expect(await store.get()).toBe("t0ken");
   });
 });
