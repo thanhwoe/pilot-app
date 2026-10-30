@@ -22,6 +22,7 @@ Run from the repo root.
 - `pnpm lint`: Biome lint and format check; `pnpm format` fixes
 - `pnpm typecheck`, `pnpm test`, `pnpm build`. The API tests need Postgres: run `pnpm db:up` first. Each test file gets its own throwaway database.
 - One package: `pnpm --filter @gop/api test`
+- Web end-to-end tests: `pnpm --filter @gop/web test:e2e` (Playwright, Chromium). Needs `pnpm db:up`, and Chromium once: `pnpm --filter @gop/web exec playwright install chromium`. It starts the API with dev codes on and a production build of the web on ports 3101 and 3100, against its own `gop_e2e` database. Give every test its own email with `uniqueEmail(testInfo)`: the API limits codes per email.
 - Database: `pnpm --filter @gop/api db:generate`, then `db:migrate`. Nothing applies migrations automatically: run `db:migrate` after pulling, before `pnpm dev`.
 
 Before you say a change is done, run `pnpm lint && pnpm typecheck && pnpm test`.

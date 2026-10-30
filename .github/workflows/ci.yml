@@ -41,3 +41,39 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm turbo run build --filter=@gop/web
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: gop
+          POSTGRES_PASSWORD: gop
+          POSTGRES_DB: gop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gop -d gop"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      E2E_DATABASE_URL: postgres://gop:gop@localhost:5432/gop_e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gop/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @gop/web test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
