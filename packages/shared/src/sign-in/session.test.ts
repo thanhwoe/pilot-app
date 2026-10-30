@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "./api";
 import { signInCopy as copy } from "./copy";
-import { signOut } from "./flow";
-import { completeSignIn, restoreSession, type SessionStore } from "./session";
+import { completeSignIn, restoreSession, type SessionStore, signOutSession } from "./session";
 
 const user = { id: "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f", email: "an@example.com" };
 
@@ -30,6 +29,14 @@ function fakeStore(token: string | null = null) {
 }
 
 describe("completeSignIn", () => {
+  it("needs no second call to learn the email", async () => {
+    const api = fakeApi();
+
+    await completeSignIn(api, fakeStore(), { email: "an@example.com", code: "123456" });
+
+    expect(api.me).not.toHaveBeenCalled();
+  });
+
   it("[security] saves the token in the store and never returns it", async () => {
     const store = fakeStore();
 
@@ -38,7 +45,7 @@ describe("completeSignIn", () => {
       code: "123456",
     });
 
-    expect(outcome).toEqual({ signedIn: true });
+    expect(outcome).toEqual({ signedIn: true, email: user.email });
     expect(JSON.stringify(outcome)).not.toContain("t0ken");
     expect(store.set).toHaveBeenCalledExactlyOnceWith("t0ken");
   });
@@ -101,6 +108,26 @@ describe("restoreSession", () => {
     expect(await store.get()).toBeNull();
   });
 
+  it("shows sign-in, and tries to delete the token, when reading the store fails", async () => {
+    const store = fakeStore("t0ken");
+    store.get.mockRejectedValueOnce(new Error("keystore unavailable"));
+    const api = fakeApi();
+
+    expect(await restoreSession(api, store)).toEqual({ kind: "clear" });
+    expect(api.me).not.toHaveBeenCalled();
+    expect(store.delete).toHaveBeenCalledOnce();
+  });
+
+  it("shows sign-in even when deleting a rejected token fails", async () => {
+    const store = fakeStore("expired-token");
+    store.delete.mockRejectedValueOnce(new Error("keystore unavailable"));
+    const api = fakeApi({
+      me: vi.fn(async () => ({ ok: false as const, error: "unauthorized" as const })),
+    });
+
+    expect(await restoreSession(api, store)).toEqual({ kind: "clear" });
+  });
+
   it("keeps the token when the API can't be reached", async () => {
     const store = fakeStore("t0ken");
     const api = fakeApi({
@@ -113,7 +140,7 @@ describe("restoreSession", () => {
   });
 });
 
-describe("signOut with a session store", () => {
+describe("signOutSession", () => {
   it.each([
     ["204", vi.fn(async () => ({ ok: true as const, data: null }))],
     ["401", vi.fn(async () => ({ ok: false as const, error: "unauthorized" as const }))],
@@ -126,7 +153,7 @@ describe("signOut with a session store", () => {
   ])("sends the stored token to the API, then deletes it after %s", async (_, apiSignOut) => {
     const store = fakeStore("t0ken");
 
-    await signOut(fakeApi({ signOut: apiSignOut }), (await store.get()) ?? undefined, store.delete);
+    await signOutSession(fakeApi({ signOut: apiSignOut }), store);
 
     expect(apiSignOut).toHaveBeenCalledWith("t0ken");
     expect(store.delete).toHaveBeenCalledOnce();
@@ -137,9 +164,27 @@ describe("signOut with a session store", () => {
     const store = fakeStore();
     const api = fakeApi();
 
-    await signOut(api, (await store.get()) ?? undefined, store.delete);
+    await signOutSession(api, store);
 
     expect(api.signOut).not.toHaveBeenCalled();
     expect(store.delete).toHaveBeenCalledOnce();
+  });
+
+  it("still deletes the token when reading it from the store fails", async () => {
+    const store = fakeStore("t0ken");
+    store.get.mockRejectedValueOnce(new Error("keystore unavailable"));
+    const api = fakeApi();
+
+    await expect(signOutSession(api, store)).resolves.toBeUndefined();
+
+    expect(api.signOut).not.toHaveBeenCalled();
+    expect(store.delete).toHaveBeenCalledOnce();
+  });
+
+  it("doesn't throw when deleting the token fails", async () => {
+    const store = fakeStore("t0ken");
+    store.delete.mockRejectedValueOnce(new Error("keystore unavailable"));
+
+    await expect(signOutSession(fakeApi(), store)).resolves.toBeUndefined();
   });
 });

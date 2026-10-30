@@ -7,7 +7,7 @@ export type SignInState =
   | { step: "email"; email?: string; error?: string }
   | { step: "code"; email: string; error?: string };
 
-export type CodeOutcome = SignInState | { signedIn: true; token: string };
+export type CodeOutcome = SignInState | { signedIn: true; token: string; email: string };
 
 const emailStepError: Partial<Record<ApiError, string>> = {
   invalid_request: copy.invalidEmail,
@@ -62,7 +62,7 @@ export async function submitCode(
       error: codeStepError[result.error] ?? copy.unavailable,
     };
   }
-  return { signedIn: true, token: result.data.token };
+  return { signedIn: true, token: result.data.token, email: result.data.user.email };
 }
 
 /**

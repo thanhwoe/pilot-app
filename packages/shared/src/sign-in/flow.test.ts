@@ -59,6 +59,7 @@ describe("submitCode", () => {
     expect(await submitCode(api, { email: "an@example.com", code: "123456" })).toEqual({
       signedIn: true,
       token: "t0ken",
+      email: user.email,
     });
     expect(api.signIn).toHaveBeenCalledWith({ email: "an@example.com", code: "123456" });
   });
