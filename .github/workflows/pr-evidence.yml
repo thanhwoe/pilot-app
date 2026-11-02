@@ -24,3 +24,15 @@ jobs:
             exit 1
           fi
           echo "No screenshot placeholders."
+
+      # From the retro of #14, whose PR merged with "- [ ] CI: not run yet (the branch hasn't been
+      # pushed)": the description was written before the push and never updated.
+      - name: No unchecked boxes in the description
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if grep -nE '^\s*[-*] \[ \]' <<<"$BODY"; then
+            echo "::error::The PR description has unchecked boxes (above). Run the check and tick it, or write 'Not run: <what>, because <why>' without a box. GitHub already shows CI, so don't list it."
+            exit 1
+          fi
+          echo "No unchecked boxes."
