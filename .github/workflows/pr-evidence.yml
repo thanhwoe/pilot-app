@@ -1,0 +1,26 @@
+name: PR evidence
+
+# Fails while a PR description still has screenshot placeholders, so a UI change can't be merged
+# without its evidence. From the retro of #7, whose PR shipped with placeholders only.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: No screenshot placeholders in the description
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if grep -q '<!-- screenshot' <<<"$BODY"; then
+            echo "::error::The PR description still has '<!-- screenshot' placeholders. Commit the screenshots to docs/evidence/<N>/ and embed them, or write 'not captured: <reason>' instead."
+            exit 1
+          fi
+          echo "No screenshot placeholders."
