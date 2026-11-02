@@ -6,8 +6,9 @@ import {
   sessionExpiresAt,
   signInBodySchema,
 } from "@gop/shared";
-import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { generateSessionToken, generateSignInCode, hashSecret } from "./secrets";
+import { createSessionCheck } from "./session";
 import type { AuthStore } from "./store";
 
 export interface AuthDeps {
@@ -25,25 +26,10 @@ const tooManyRequests: ErrorResponse = { error: "too_many_requests" };
 const invalidCode: ErrorResponse = { error: "invalid_code" };
 const unauthorized: ErrorResponse = { error: "unauthorized" };
 
-/** The token from `Authorization: Bearer <token>`, or null. */
-function bearerToken(request: FastifyRequest): string | null {
-  const match = /^Bearer (\S+)$/.exec(request.headers.authorization ?? "");
-  return match?.[1] ?? null;
-}
-
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps) {
   const { authStore, authSecret, sendSignInCode, now } = deps;
 
-  /** The hash of the request's session token and its user, or null when there's no live session. */
-  async function findSession(request: FastifyRequest) {
-    const token = bearerToken(request);
-    if (!token) {
-      return null;
-    }
-    const tokenHash = hashSecret(token, authSecret);
-    const user = await authStore.findSessionUser(tokenHash, now());
-    return user ? { tokenHash, user } : null;
-  }
+  const findSession = createSessionCheck(deps);
 
   app.post("/auth/code", async (request, reply) => {
     const body = requestCodeBodySchema.safeParse(request.body);
