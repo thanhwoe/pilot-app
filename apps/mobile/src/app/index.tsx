@@ -68,9 +68,22 @@ function Groups() {
   const [creating, setCreating] = useState(false);
   // `creating` disables the button only from the next render; this stops a second fast tap.
   const inFlight = useRef(false);
+  // A request still pending when this screen goes away (say, the user signed out) must not expire
+  // the session: by the time it answers, the stored token may belong to a new sign-in.
+  const mounted = useRef(true);
+
+  async function expireIfShown() {
+    if (mounted.current) {
+      await expire();
+    }
+  }
 
   useEffect(() => {
+    mounted.current = true;
     loadMyGroups().then((state) => {
+      if (!mounted.current) {
+        return;
+      }
       // The API rejected the session: sign-in replaces this screen.
       if (state.kind === "signed-out") {
         expire();
@@ -78,6 +91,9 @@ function Groups() {
       }
       setGroups(state);
     });
+    return () => {
+      mounted.current = false;
+    };
   }, [expire]);
 
   async function create() {
@@ -90,7 +106,7 @@ function Groups() {
       const outcome = await createMyGroup(name);
       if (!outcome.created) {
         if ("signedOut" in outcome) {
-          await expire();
+          await expireIfShown();
           return;
         }
         setError(outcome.error);
@@ -105,7 +121,7 @@ function Groups() {
         // The first load failed: ask again rather than show the new group as the only one.
         const state = await loadMyGroups();
         if (state.kind === "signed-out") {
-          await expire();
+          await expireIfShown();
           return;
         }
         setGroups(state);
