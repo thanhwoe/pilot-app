@@ -6,6 +6,7 @@ import {
 } from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
+import { createMemoryGroupStore } from "../groups/memory-store";
 import { createMemoryAuthStore } from "./memory-store";
 import { hashSecret } from "./secrets";
 
@@ -22,6 +23,7 @@ function setup() {
     corsOrigins: [],
     version: "1.2.3",
     authStore,
+    groupStore: createMemoryGroupStore(),
     authSecret,
     sendSignInCode: async (email, code) => {
       sent.push({ email, code });
