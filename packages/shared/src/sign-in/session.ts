@@ -64,6 +64,14 @@ export async function signOutSession(api: AuthApi, store: SessionStore): Promise
   }
 }
 
+/**
+ * A session the API rejected during use (a 401 from another call): deletes the stored token and
+ * never throws. No API call: the API has already rejected that token.
+ */
+export async function expireSession(store: SessionStore): Promise<void> {
+  await deleteQuietly(store);
+}
+
 async function deleteQuietly(store: SessionStore): Promise<void> {
   try {
     await store.delete();

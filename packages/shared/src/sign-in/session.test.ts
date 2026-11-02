@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "./api";
 import { signInCopy as copy } from "./copy";
-import { completeSignIn, restoreSession, type SessionStore, signOutSession } from "./session";
+import {
+  completeSignIn,
+  expireSession,
+  restoreSession,
+  type SessionStore,
+  signOutSession,
+} from "./session";
 
 const user = { id: "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f", email: "an@example.com" };
 
@@ -186,5 +192,23 @@ describe("signOutSession", () => {
     store.delete.mockRejectedValueOnce(new Error("keystore unavailable"));
 
     await expect(signOutSession(fakeApi(), store)).resolves.toBeUndefined();
+  });
+});
+
+describe("expireSession", () => {
+  it("[security] AC 3, 4: deletes the stored token", async () => {
+    const store = fakeStore("t0ken");
+
+    await expireSession(store);
+
+    expect(store.delete).toHaveBeenCalledOnce();
+    expect(await store.get()).toBeNull();
+  });
+
+  it("[security] AC 3, 4: doesn't throw when deleting the token fails", async () => {
+    const store = fakeStore("t0ken");
+    store.delete.mockRejectedValueOnce(new Error("keystore unavailable"));
+
+    await expect(expireSession(store)).resolves.toBeUndefined();
   });
 });
