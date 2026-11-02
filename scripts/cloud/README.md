@@ -25,6 +25,10 @@ At claude.ai/code, open the environment selector, then edit the environment that
 2. **Setup script:** paste the contents of [`setup.sh`](setup.sh), or load the file with **Choose file**.
 3. Save, then start a new session. Its first message should show the status line above.
 
+## Start each session with the repo attached
+
+On the new-session screen, pick the repository `thanhwoe/pilot-app` and the environment `pilot-app` before you send the first message. The hook runs only when a session starts or resumes, so a repo added to a running session gets no hook. Node 24 is then off `PATH`, and Claude has to run `bash scripts/cloud/session-start.sh` by hand and prefix each command with `PATH=/opt/node24/bin:$PATH`.
+
 When `setup.sh` changes in the repo, paste it into the environment again. The environment doesn't read the repo's copy.
 
 ## Limits
