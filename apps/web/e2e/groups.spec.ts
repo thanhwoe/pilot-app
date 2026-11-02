@@ -61,3 +61,12 @@ test("AC 16: a name of only spaces shows the empty-name error and creates no gro
   await page.reload();
   await expect(page.getByText("Bạn chưa có nhóm nào.")).toBeVisible();
 });
+
+test("createGroupAction without a session sends me to sign-in", async ({ page }, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  await page.context().clearCookies();
+
+  await createGroup(page, "Đà Lạt");
+
+  await expect(page).toHaveURL("/sign-in");
+});

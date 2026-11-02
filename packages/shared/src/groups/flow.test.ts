@@ -68,6 +68,17 @@ describe("submitGroup", () => {
       error: "Không kết nối được máy chủ. Hãy thử lại.",
     });
   });
+
+  it("asks for a name when the API rejects the request as invalid", async () => {
+    const api = fakeApi({
+      createGroup: vi.fn(async () => ({ ok: false as const, error: "invalid_request" as const })),
+    });
+
+    expect(await submitGroup(api, "t0ken", { name: "Nhà" })).toEqual({
+      created: false,
+      error: "Hãy nhập tên nhóm.",
+    });
+  });
 });
 
 describe("groupsCopy", () => {
