@@ -4,8 +4,14 @@
 #   e2e/run.sh ios|android [--no-build] [flow.yaml ...]
 #
 # Needs `pnpm db:up`, Maestro (~/.maestro/bin) and the iOS Simulator or the Android SDK. Run one
-# platform at a time: the Mac mini has room for one simulator or emulator.
+# platform at a time: the Mac mini has room for one simulator or emulator. The script waits for
+# any other end-to-end run on the machine to finish first.
 set -euo pipefail
+
+# One end-to-end run at a time on this machine (see scripts/e2e-lock.sh).
+if [[ "${GOP_E2E_LOCKED:-}" != 1 ]]; then
+  exec "$(dirname "$0")/../../../scripts/e2e-lock.sh" "$0" "$@"
+fi
 
 platform="${1:-}"
 shift || true
