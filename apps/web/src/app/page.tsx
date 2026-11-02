@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Account } from "./account";
 import { ApiStatus } from "./api-status";
+import { Groups } from "./groups";
 
 export default function Home() {
   return (
@@ -9,6 +10,9 @@ export default function Home() {
       <p>Chia tiền nhóm, biết ai nợ ai.</p>
       <Suspense fallback={<p className="status">Đang tải tài khoản…</p>}>
         <Account />
+      </Suspense>
+      <Suspense fallback={<p className="status">Đang tải nhóm…</p>}>
+        <Groups />
       </Suspense>
       <Suspense fallback={<p className="status">Đang kiểm tra API…</p>}>
         <ApiStatus />
