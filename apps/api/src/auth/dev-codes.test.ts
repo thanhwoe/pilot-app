@@ -1,6 +1,7 @@
 import { devSignInCodeResponseSchema } from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
+import { createMemoryGroupStore } from "../groups/memory-store";
 import { type DevCodes, devCodesEnvSchema, devCodesFor } from "./dev-codes";
 import { createMemoryAuthStore } from "./memory-store";
 
@@ -12,6 +13,7 @@ function setup(devCodes: DevCodes | undefined) {
     corsOrigins: [],
     version: "1.2.3",
     authStore: createMemoryAuthStore(),
+    groupStore: createMemoryGroupStore(),
     authSecret: "test-secret-that-is-at-least-32-characters",
     sendSignInCode: async (_email, code) => {
       sent.push(code);

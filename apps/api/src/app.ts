@@ -3,6 +3,8 @@ import type { HealthResponse } from "@gop/shared";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import { type DevCodes, registerDevCodeRoute } from "./auth/dev-codes";
 import { type AuthDeps, registerAuthRoutes } from "./auth/routes";
+import { registerGroupRoutes } from "./groups/routes";
+import type { GroupStore } from "./groups/store";
 
 export interface AppDeps extends Omit<AuthDeps, "now"> {
   /** Resolves to true when the database is reachable. */
@@ -16,6 +18,7 @@ export interface AppDeps extends Omit<AuthDeps, "now"> {
   now?: () => Date;
   /** Set only when the dev code endpoint is on. See `devCodesFor`. */
   devCodes?: DevCodes;
+  groupStore: GroupStore;
 }
 
 /** Builds the Fastify app without listening, so tests can call it with `app.inject`. */
@@ -27,6 +30,7 @@ export function buildApp({
   now = () => new Date(),
   devCodes,
   sendSignInCode,
+  groupStore,
   ...auth
 }: AppDeps) {
   const app = Fastify({ logger });
@@ -51,6 +55,7 @@ export function buildApp({
   if (devCodes) {
     registerDevCodeRoute(app, devCodes);
   }
+  registerGroupRoutes(app, { ...auth, now, groupStore });
 
   return app;
 }

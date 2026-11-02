@@ -1,0 +1,37 @@
+# #14 AC 18, 20: a new group shows at the top with "1 thành viên" and the field is empty again.
+# Names are ASCII because Maestro can't type other text on Android; web and API tests cover
+# Vietnamese names. Order is checked with `below`: Maestro applies `index` after matching text.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runFlow: subflows/create-group.yaml
+- assertVisible:
+    id: group-name
+    text: Da Lat
+- assertVisible:
+    id: group-member-count
+    text: 1 thành viên
+- assertNotVisible:
+    id: groups-empty
+- assertNotVisible:
+    id: group-name-input
+    text: Da Lat
+- evalScript: ${output.groupName = 'Nha'}
+- runFlow: subflows/create-group.yaml
+- assertVisible:
+    id: group-name
+    text: Nha
+    below:
+      id: create-group
+- assertVisible:
+    id: group-name
+    text: Da Lat
+    below:
+      id: group-name
+      text: Nha
+- assertNotVisible:
+    id: group-name-input
+    text: Nha

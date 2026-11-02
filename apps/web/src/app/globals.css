@@ -70,14 +70,17 @@ a {
 }
 
 .sign-in,
-.account {
+.account,
+.groups,
+.create-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-width: 360px;
 }
 
-.sign-in input {
+.sign-in input,
+.create-group input {
   padding: 8px 10px;
   font: inherit;
   color: inherit;
@@ -87,7 +90,8 @@ a {
 }
 
 .sign-in button,
-.account button {
+.account button,
+.create-group button {
   align-self: flex-start;
   padding: 8px 16px;
   font: inherit;
@@ -98,7 +102,8 @@ a {
   cursor: pointer;
 }
 
-.sign-in button:disabled {
+.sign-in button:disabled,
+.create-group button:disabled {
   opacity: 0.6;
   cursor: default;
 }
@@ -112,4 +117,19 @@ a {
 
 .form-error {
   color: #cf222e;
+}
+
+.groups h2 {
+  font-size: 1.25rem;
+}
+
+.group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+}
+
+.group-members {
+  opacity: 0.7;
 }

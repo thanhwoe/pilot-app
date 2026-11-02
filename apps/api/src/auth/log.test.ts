@@ -2,6 +2,7 @@ import { Writable } from "node:stream";
 import { signInResponseSchema } from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
+import { createMemoryGroupStore } from "../groups/memory-store";
 import { logSignInCode } from "./log-code-sender";
 import { createMemoryAuthStore } from "./memory-store";
 
@@ -19,6 +20,7 @@ async function signInWithLogCaptured() {
     corsOrigins: [],
     version: "1.2.3",
     authStore: createMemoryAuthStore(),
+    groupStore: createMemoryGroupStore(),
     authSecret: "test-secret-that-is-at-least-32-characters",
     sendSignInCode: logSignInCode,
     logger: { level: "trace", stream },

@@ -4,6 +4,7 @@ import { logSignInCode } from "./auth/log-code-sender";
 import { createPostgresAuthStore } from "./auth/store";
 import { createDb } from "./db/client";
 import { env } from "./env";
+import { createPostgresGroupStore } from "./groups/store";
 import { apiVersion } from "./version";
 
 const database = createDb(env.DATABASE_URL);
@@ -13,6 +14,7 @@ const app = buildApp({
   version: apiVersion,
   logger: true,
   authStore: createPostgresAuthStore(database.db),
+  groupStore: createPostgresGroupStore(database.db),
   authSecret: env.AUTH_SECRET,
   sendSignInCode: logSignInCode,
   devCodes: devCodesFor(env),

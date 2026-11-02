@@ -18,6 +18,12 @@ describe("createTestDb", () => {
       sql`select table_name from information_schema.tables where table_schema = 'public' order by table_name`,
     );
 
-    expect(rows.map((row) => row.table_name)).toEqual(["sessions", "sign_in_codes", "users"]);
+    expect(rows.map((row) => row.table_name)).toEqual([
+      "group_members",
+      "groups",
+      "sessions",
+      "sign_in_codes",
+      "users",
+    ]);
   });
 });
