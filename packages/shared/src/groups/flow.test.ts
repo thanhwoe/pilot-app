@@ -27,14 +27,21 @@ describe("loadGroups", () => {
     expect(api.listGroups).toHaveBeenCalledWith("t0ken");
   });
 
-  it.each(["unavailable", "unauthorized"] as const)(
-    "reads %s as unavailable (AC 17, 22)",
-    async (error) => {
-      const api = fakeApi({ listGroups: vi.fn(async () => ({ ok: false as const, error })) });
+  it("reads unavailable as the connection error (#14 AC 17, 22; #19 AC 5)", async () => {
+    const api = fakeApi({
+      listGroups: vi.fn(async () => ({ ok: false as const, error: "unavailable" as const })),
+    });
 
-      expect(await loadGroups(api, "t0ken")).toEqual({ kind: "unavailable" });
-    },
-  );
+    expect(await loadGroups(api, "t0ken")).toEqual({ kind: "unavailable" });
+  });
+
+  it("[security] #19 AC 2, 4: reads unauthorized as signed out", async () => {
+    const api = fakeApi({
+      listGroups: vi.fn(async () => ({ ok: false as const, error: "unauthorized" as const })),
+    });
+
+    expect(await loadGroups(api, "t0ken")).toEqual({ kind: "signed-out" });
+  });
 });
 
 describe("submitGroup", () => {
@@ -58,7 +65,7 @@ describe("submitGroup", () => {
     expect(api.createGroup).not.toHaveBeenCalled();
   });
 
-  it("shows the connection error when the API can't be reached (AC 17, 22)", async () => {
+  it("shows the connection error when the API can't be reached (#14 AC 17, 22; #19 AC 5)", async () => {
     const api = fakeApi({
       createGroup: vi.fn(async () => ({ ok: false as const, error: "unavailable" as const })),
     });
@@ -69,7 +76,18 @@ describe("submitGroup", () => {
     });
   });
 
-  it("asks for a name when the API rejects the request as invalid", async () => {
+  it("[security] #19 AC 1, 3: reads unauthorized as signed out", async () => {
+    const api = fakeApi({
+      createGroup: vi.fn(async () => ({ ok: false as const, error: "unauthorized" as const })),
+    });
+
+    expect(await submitGroup(api, "t0ken", { name: "Nhà" })).toEqual({
+      created: false,
+      signedOut: true,
+    });
+  });
+
+  it("asks for a name when the API rejects the request as invalid (#19 AC 6)", async () => {
     const api = fakeApi({
       createGroup: vi.fn(async () => ({ ok: false as const, error: "invalid_request" as const })),
     });

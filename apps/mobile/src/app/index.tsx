@@ -61,6 +61,7 @@ export default function Home() {
 
 /** My groups, newest first, and the form to create one. */
 function Groups() {
+  const { expire } = useSession();
   const [groups, setGroups] = useState<GroupsState | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -69,8 +70,15 @@ function Groups() {
   const inFlight = useRef(false);
 
   useEffect(() => {
-    loadMyGroups().then(setGroups);
-  }, []);
+    loadMyGroups().then((state) => {
+      // The API rejected the session: sign-in replaces this screen.
+      if (state.kind === "signed-out") {
+        expire();
+        return;
+      }
+      setGroups(state);
+    });
+  }, [expire]);
 
   async function create() {
     if (inFlight.current) {
@@ -81,6 +89,10 @@ function Groups() {
     try {
       const outcome = await createMyGroup(name);
       if (!outcome.created) {
+        if ("signedOut" in outcome) {
+          await expire();
+          return;
+        }
         setError(outcome.error);
         return;
       }
@@ -91,7 +103,12 @@ function Groups() {
         setGroups({ kind: "loaded", groups: [outcome.group, ...groups.groups] });
       } else {
         // The first load failed: ask again rather than show the new group as the only one.
-        setGroups(await loadMyGroups());
+        const state = await loadMyGroups();
+        if (state.kind === "signed-out") {
+          await expire();
+          return;
+        }
+        setGroups(state);
       }
     } finally {
       inFlight.current = false;

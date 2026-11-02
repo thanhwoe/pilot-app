@@ -1,5 +1,6 @@
 import { groupsCopy as copy, loadGroups } from "@gop/shared";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { groupsApi } from "@/lib/api";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
 import { CreateGroupForm } from "./create-group-form";
@@ -12,6 +13,10 @@ export async function Groups() {
     return null;
   }
   const state = await loadGroups(groupsApi(), token);
+  if (state.kind === "signed-out") {
+    // The API rejected the session; a Server Component can't change cookies, the route handler does.
+    redirect("/session/clear");
+  }
 
   return (
     <section className="groups" aria-labelledby="groups-heading">
