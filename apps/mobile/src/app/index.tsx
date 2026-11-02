@@ -5,7 +5,7 @@ import {
   groupsCopy,
   type HealthResponse,
 } from "@gop/shared";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
 import { createMyGroup, loadMyGroups } from "@/lib/groups";
@@ -65,12 +65,18 @@ function Groups() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // `creating` disables the button only from the next render; this stops a second fast tap.
+  const inFlight = useRef(false);
 
   useEffect(() => {
     loadMyGroups().then(setGroups);
   }, []);
 
   async function create() {
+    if (inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
     setCreating(true);
     try {
       const outcome = await createMyGroup(name);
@@ -80,13 +86,15 @@ function Groups() {
       }
       setError(null);
       setName("");
-      // The new group is the newest, so it goes first, as the API lists it.
-      setGroups((current) =>
-        current?.kind === "loaded"
-          ? { kind: "loaded", groups: [outcome.group, ...current.groups] }
-          : { kind: "loaded", groups: [outcome.group] },
-      );
+      if (groups?.kind === "loaded") {
+        // The new group is the newest, so it goes first, as the API lists it.
+        setGroups({ kind: "loaded", groups: [outcome.group, ...groups.groups] });
+      } else {
+        // The first load failed: ask again rather than show the new group as the only one.
+        setGroups(await loadMyGroups());
+      }
     } finally {
+      inFlight.current = false;
       setCreating(false);
     }
   }
