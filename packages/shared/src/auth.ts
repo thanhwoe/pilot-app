@@ -38,9 +38,15 @@ export const meResponseSchema = userSchema;
 
 export type MeResponse = z.infer<typeof meResponseSchema>;
 
-/** Body of every 4xx response from the auth routes. */
+/** Body of every 4xx response from the API. */
 export const errorResponseSchema = z.object({
-  error: z.enum(["invalid_request", "invalid_code", "too_many_requests", "unauthorized"]),
+  error: z.enum([
+    "invalid_request",
+    "invalid_code",
+    "too_many_requests",
+    "unauthorized",
+    "not_found",
+  ]),
 });
 
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
