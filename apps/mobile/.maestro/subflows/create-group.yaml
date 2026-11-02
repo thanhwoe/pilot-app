@@ -1,0 +1,10 @@
+# Types ${output.groupName} in the create-group field and taps "Tạo nhóm".
+appId: com.thanhwoe.gop
+---
+- tapOn:
+    id: group-name-input
+- inputText: ${output.groupName}
+- hideKeyboard
+- tapOn:
+    id: create-group
+    text: Tạo nhóm

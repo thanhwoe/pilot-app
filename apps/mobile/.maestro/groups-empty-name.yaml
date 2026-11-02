@@ -1,0 +1,15 @@
+# #14 AC 21: a name of only spaces shows the empty-name error and creates no group.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = '   '}
+- runFlow: subflows/create-group.yaml
+- assertVisible:
+    id: group-form-error
+    text: Hãy nhập tên nhóm.
+- assertVisible:
+    id: groups-empty
+- assertNotVisible:
+    id: group-name
