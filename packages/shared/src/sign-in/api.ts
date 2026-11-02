@@ -1,6 +1,12 @@
 import {
-  type ErrorResponse,
-  errorResponseSchema,
+  API_TIMEOUT_MS,
+  type ApiResult,
+  bearer,
+  createApiCall,
+  type Fetch,
+  postJson,
+} from "../api-client";
+import {
   type MeResponse,
   meResponseSchema,
   type RequestCodeBody,
@@ -9,10 +15,7 @@ import {
   signInResponseSchema,
 } from "../auth";
 
-/** An error body from the API, or `unavailable` when the API can't be reached or answers nonsense. */
-export type ApiError = ErrorResponse["error"] | "unavailable";
-
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
+export type { ApiError, ApiResult } from "../api-client";
 
 /** The #5 auth endpoints, as the web server and the mobile app call them. */
 export interface AuthApi {
@@ -22,54 +25,13 @@ export interface AuthApi {
   signOut(token: string): Promise<ApiResult<null>>;
 }
 
-type Fetch = (url: string, init: RequestInit) => Promise<Response>;
-
-/** The part of a shared Zod schema this client needs. */
-interface Schema<T> {
-  safeParse(value: unknown): { success: true; data: T } | { success: false };
-}
-
-/** How long a call may take before the app shows the connection error instead of waiting. */
-const API_TIMEOUT_MS = 5_000;
-
 /** `baseUrl` comes from each app: `API_URL` on the web, `EXPO_PUBLIC_API_URL` on mobile. */
 export function createAuthApi(
   baseUrl: string,
   fetchFn: Fetch = fetch,
   timeoutMs = API_TIMEOUT_MS,
 ): AuthApi {
-  async function call<T>(
-    path: string,
-    init: RequestInit,
-    schema: Schema<T> | null,
-  ): Promise<ApiResult<T>> {
-    // AbortController and setTimeout rather than AbortSignal.timeout, which React Native may lack.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetchFn(`${baseUrl}${path}`, { ...init, signal: controller.signal });
-      if (res.ok) {
-        if (schema === null) {
-          return { ok: true, data: null as T };
-        }
-        const data = schema.safeParse(await res.json());
-        return data.success ? { ok: true, data: data.data } : { ok: false, error: "unavailable" };
-      }
-      const body = errorResponseSchema.safeParse(await res.json());
-      return { ok: false, error: body.success ? body.data.error : "unavailable" };
-    } catch {
-      return { ok: false, error: "unavailable" };
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  const postJson = (body: unknown): RequestInit => ({
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+  const call = createApiCall(baseUrl, fetchFn, timeoutMs);
 
   return {
     requestCode: (body) => call("/auth/code", postJson(body), null),
