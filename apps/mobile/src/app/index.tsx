@@ -4,12 +4,15 @@ import {
   type GroupsState,
   groupsCopy,
   type HealthResponse,
+  isCreateSignedOut,
+  isListSignedOut,
 } from "@gop/shared";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
 import { createMyGroup, loadMyGroups } from "@/lib/groups";
 import { useSession } from "@/lib/session";
+import { useSessionGuard } from "@/lib/session-guard";
 
 type State = { kind: "loading" } | { kind: "ok"; health: HealthResponse } | { kind: "error" };
 
@@ -61,40 +64,21 @@ export default function Home() {
 
 /** My groups, newest first, and the form to create one. */
 function Groups() {
-  const { expire } = useSession();
+  const guard = useSessionGuard();
   const [groups, setGroups] = useState<GroupsState | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   // `creating` disables the button only from the next render; this stops a second fast tap.
   const inFlight = useRef(false);
-  // A request still pending when this screen goes away (say, the user signed out) must not expire
-  // the session: by the time it answers, the stored token may belong to a new sign-in.
-  const mounted = useRef(true);
-
-  async function expireIfShown() {
-    if (mounted.current) {
-      await expire();
-    }
-  }
 
   useEffect(() => {
-    mounted.current = true;
-    loadMyGroups().then((state) => {
-      if (!mounted.current) {
-        return;
+    guard(loadMyGroups, isListSignedOut).then((state) => {
+      if (state) {
+        setGroups(state);
       }
-      // The API rejected the session: sign-in replaces this screen.
-      if (state.kind === "signed-out") {
-        expire();
-        return;
-      }
-      setGroups(state);
     });
-    return () => {
-      mounted.current = false;
-    };
-  }, [expire]);
+  }, [guard]);
 
   async function create() {
     if (inFlight.current) {
@@ -103,12 +87,11 @@ function Groups() {
     inFlight.current = true;
     setCreating(true);
     try {
-      const outcome = await createMyGroup(name);
+      const outcome = await guard(() => createMyGroup(name), isCreateSignedOut);
+      if (!outcome) {
+        return;
+      }
       if (!outcome.created) {
-        if ("signedOut" in outcome) {
-          await expireIfShown();
-          return;
-        }
         setError(outcome.error);
         return;
       }
@@ -119,12 +102,10 @@ function Groups() {
         setGroups({ kind: "loaded", groups: [outcome.group, ...groups.groups] });
       } else {
         // The first load failed: ask again rather than show the new group as the only one.
-        const state = await loadMyGroups();
-        if (state.kind === "signed-out") {
-          await expireIfShown();
-          return;
+        const state = await guard(loadMyGroups, isListSignedOut);
+        if (state) {
+          setGroups(state);
         }
-        setGroups(state);
       }
     } finally {
       inFlight.current = false;
