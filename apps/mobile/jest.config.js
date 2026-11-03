@@ -2,5 +2,5 @@
 module.exports = {
   preset: "jest-expo",
   moduleNameMapper: { "^@/(.*)$": "<rootDir>/src/$1" },
-  testMatch: ["<rootDir>/src/**/*.test.tsx"],
+  testMatch: ["<rootDir>/src/**/*.test.{ts,tsx}"],
 };
