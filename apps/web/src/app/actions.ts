@@ -18,6 +18,8 @@ export async function signOutAction(): Promise<void> {
 
 export interface CreateGroupState {
   error?: string;
+  /** The name that was submitted when the create failed, so the field keeps it for a retry. */
+  name?: string;
 }
 
 /** The create-group form: creates the group as the signed-in member, then refreshes the list. */
@@ -30,17 +32,16 @@ export async function createGroupAction(
   if (!token) {
     redirect("/sign-in");
   }
-  const name = form.get("name");
-  const outcome = await submitGroup(groupsApi(), token, {
-    name: typeof name === "string" ? name : "",
-  });
+  const submitted = form.get("name");
+  const name = typeof submitted === "string" ? submitted : "";
+  const outcome = await submitGroup(groupsApi(), token, { name });
   if (!outcome.created) {
     if ("signedOut" in outcome) {
       // The API rejected the session: remove the cookie and show sign-in, not a retry message.
       cookieStore.delete(SESSION_COOKIE);
       redirect("/sign-in");
     }
-    return { error: outcome.error };
+    return { error: outcome.error, name };
   }
   refresh();
   return {};

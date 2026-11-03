@@ -13,7 +13,13 @@ export function CreateGroupForm() {
     <form className="create-group" action={formAction}>
       <label htmlFor="group-name">{copy.nameLabel}</label>
       {/* Not `required`: an empty name must reach the action, which shows the error. */}
-      <input id="group-name" name="name" type="text" maxLength={GROUP_NAME_MAX_LENGTH} />
+      <input
+        id="group-name"
+        name="name"
+        type="text"
+        maxLength={GROUP_NAME_MAX_LENGTH}
+        defaultValue={state.name}
+      />
       {state.error && (
         <p className="form-error" role="alert">
           {state.error}
