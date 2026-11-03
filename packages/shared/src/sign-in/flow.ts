@@ -1,4 +1,5 @@
 import { emailSchema, type MeResponse, signInBodySchema } from "../auth";
+import { guardSession } from "../session-guard";
 import type { ApiError, ApiResult, AuthApi } from "./api";
 import { signInCopy as copy } from "./copy";
 
@@ -102,8 +103,14 @@ export type AccountState =
  * is kept, and sign-out is still offered because it works without the API.
  */
 export function accountState(me: ApiResult<MeResponse> | null): AccountState {
-  if (me === null || (!me.ok && me.error === "unauthorized")) {
+  if (me === null) {
     return { kind: "clear" };
   }
-  return me.ok ? { kind: "signed-in", email: me.data.email } : { kind: "unavailable" };
+  const result = guardSession(me);
+  if (result.kind === "signed-out") {
+    return { kind: "clear" };
+  }
+  return result.kind === "ok"
+    ? { kind: "signed-in", email: result.data.email }
+    : { kind: "unavailable" };
 }

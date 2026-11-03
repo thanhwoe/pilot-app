@@ -1,4 +1,5 @@
 import { createGroupBodySchema, type Group } from "../groups";
+import { guardSession } from "../session-guard";
 import type { GroupsApi } from "./api";
 import { groupsCopy as copy } from "./copy";
 
@@ -13,11 +14,11 @@ export type GroupsState =
  * other failure shows the connection error.
  */
 export async function loadGroups(api: GroupsApi, token: string): Promise<GroupsState> {
-  const result = await api.listGroups(token);
-  if (result.ok) {
+  const result = guardSession(await api.listGroups(token));
+  if (result.kind === "ok") {
     return { kind: "loaded", groups: result.data.groups };
   }
-  return result.error === "unauthorized" ? { kind: "signed-out" } : { kind: "unavailable" };
+  return result.kind === "signed-out" ? { kind: "signed-out" } : { kind: "unavailable" };
 }
 
 /** `signedOut`: the API rejected the session, so the app shows sign-in instead of an error. */
@@ -39,11 +40,11 @@ export async function submitGroup(
   if (!body.success) {
     return { created: false, error: copy.nameRequired };
   }
-  const result = await api.createGroup(token, body.data);
-  if (!result.ok) {
-    if (result.error === "unauthorized") {
-      return { created: false, signedOut: true };
-    }
+  const result = guardSession(await api.createGroup(token, body.data));
+  if (result.kind === "signed-out") {
+    return { created: false, signedOut: true };
+  }
+  if (result.kind === "failed") {
     return {
       created: false,
       error: result.error === "invalid_request" ? copy.nameRequired : copy.unavailable,
