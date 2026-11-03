@@ -8,6 +8,9 @@ import { secureSessionStore } from "@/lib/session-store";
 
 // The real home screen, session provider and shared flows run here. Only the network is faked
 // (the API clients) and the keychain (an in-memory store).
+// A test can hold the token deletion open by setting this to a promise it resolves later.
+let mockHoldDelete: Promise<void> | null = null;
+
 jest.mock("expo-secure-store", () => {
   const items = new Map<string, string>();
   // Plain functions, not jest.fn: resetAllMocks in beforeEach would wipe their behaviour.
@@ -17,6 +20,7 @@ jest.mock("expo-secure-store", () => {
       items.set(key, value);
     },
     deleteItemAsync: async (key: string) => {
+      await mockHoldDelete;
       items.delete(key);
     },
   };
@@ -88,6 +92,7 @@ async function renderApp() {
 }
 
 beforeEach(async () => {
+  mockHoldDelete = null;
   jest.resetAllMocks();
   jest.mocked(fetchHealth).mockResolvedValue({ status: "ok", db: "up", version: "test" });
   me.mockResolvedValue({ ok: true, data: user });
@@ -399,4 +404,29 @@ test("a group can be created while the first load is pending", async () => {
   expect(createGroup).toHaveBeenCalledTimes(1);
   first.resolve({ ok: true, data: { groups: [] } });
   await settle();
+});
+
+// #21 review: a create whose reload answers 401 waits for the sign-out, so the button stays
+// disabled until the token is gone and a second create can't start meanwhile.
+test("[security] a create whose reload answers 401 stays busy until the token is deleted", async () => {
+  const created = group("Da Lat", "2026-11-02T00:00:00.000Z");
+  const tokenDeleted = deferred<void>();
+  listGroups
+    .mockResolvedValueOnce(unavailable)
+    .mockResolvedValueOnce({ ok: false, error: "unauthorized" });
+  createGroup.mockResolvedValue({ ok: true, data: created });
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+  mockHoldDelete = tokenDeleted.promise;
+  await tapWithoutWaiting("create-group");
+  await settle();
+
+  expect(listGroups).toHaveBeenCalledTimes(2);
+  expect(screen.getByTestId("create-group").props.accessibilityState.disabled).toBe(true);
+
+  tokenDeleted.resolve();
+  await screen.findByTestId("sign-in");
+  expect(await secureSessionStore.get()).toBeNull();
 });

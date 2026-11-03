@@ -93,7 +93,7 @@ function Groups() {
     }
     // The API rejected the session: sign-in replaces this screen.
     if (state.kind === "signed-out") {
-      expire();
+      await expire();
       return;
     }
     setGroups(state);
