@@ -318,3 +318,38 @@ test("two presses on retry before a re-render send one list request", async () =
   held.resolve({ ok: true, data: { groups: [] } });
   await settle();
 });
+
+// #21 AC 5 [security]: a retry the API answers with 401 ends the session on this device.
+test("[security] a retry the API rejects with 401 deletes the token and shows sign-in", async () => {
+  listGroups
+    .mockResolvedValueOnce(unavailable)
+    .mockResolvedValueOnce({ ok: false, error: "unauthorized" });
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+  await fireEvent.press(screen.getByTestId("groups-retry"));
+
+  await screen.findByTestId("sign-in");
+  expect(await secureSessionStore.get()).toBeNull();
+  expect(screen.queryByTestId("groups-error")).toBeNull();
+});
+
+// #21 A6 [security]: a retry still pending at sign-out must not expire the next sign-in.
+test("[security] a retry pending at sign-out answers 401 after the next sign-in", async () => {
+  const late = deferred<ListAnswer>();
+  listGroups
+    .mockResolvedValueOnce(unavailable)
+    .mockReturnValueOnce(late.promise)
+    .mockResolvedValueOnce({ ok: true, data: { groups: [] } });
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+  await tapWithoutWaiting("groups-retry");
+  await signOutAndSignInAgain();
+
+  late.resolve({ ok: false, error: "unauthorized" });
+  await settle();
+
+  expect(await secureSessionStore.get()).toBe("new-token");
+  expect(screen.getByTestId("signed-in-email")).toBeTruthy();
+});
