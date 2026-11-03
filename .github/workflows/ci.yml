@@ -10,6 +10,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A PR's CI tests the PR merged into main as it was when the PR last changed. When another PR
+  # lands first, those results are stale: #31 and #20 each passed alone and broke main together
+  # (#21 retro). Fail until the PR contains the current main, so CI runs again on the combination.
+  up-to-date:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: The branch contains the latest main
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          git merge-base --is-ancestor "origin/${{ github.base_ref }}" HEAD || {
+            echo "::error::${{ github.base_ref }} has moved. Merge it into this branch; CI then runs again on the combination."
+            exit 1
+          }
+
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
