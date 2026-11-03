@@ -41,6 +41,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm turbo run build --filter=@gop/web
+      # Bundles the mobile JavaScript the way a Release build does, so a module the bundle can't
+      # resolve (such as a test file under src/app, #23) fails here and not on the Mac mini.
+      - run: pnpm --filter @gop/mobile exec expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/mobile-bundle"
 
   e2e:
     runs-on: ubuntu-latest
