@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { Pressable } from "react-native";
-import { groupsApi } from "@/lib/api";
+import { authApi, fetchHealth, groupsApi } from "@/lib/api";
 import { SessionProvider, useSession } from "@/lib/session";
 import { secureSessionStore } from "@/lib/session-store";
 import Home from "./index";
@@ -24,7 +24,7 @@ jest.mock("expo-secure-store", () => {
 
 jest.mock("@/lib/api", () => ({
   apiUrl: "http://api.test",
-  fetchHealth: jest.fn(async () => ({ status: "ok", db: "ok" })),
+  fetchHealth: jest.fn(async () => ({ status: "ok", db: "up", version: "test" })),
   authApi: {
     requestCode: jest.fn(),
     signIn: jest.fn(),
@@ -34,8 +34,29 @@ jest.mock("@/lib/api", () => ({
   groupsApi: { listGroups: jest.fn(), createGroup: jest.fn() },
 }));
 
+const me = jest.mocked(authApi.me);
+const signInApi = jest.mocked(authApi.signIn);
+const signOutApi = jest.mocked(authApi.signOut);
 const listGroups = jest.mocked(groupsApi.listGroups);
 const createGroup = jest.mocked(groupsApi.createGroup);
+
+const user = { id: crypto.randomUUID(), email: "an@example.com" };
+
+/** A request the test answers when it chooses. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+/** Lets every promise already answered run its continuations. */
+async function settle() {
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 0));
+  });
+}
 
 function group(name: string, createdAt: string) {
   return { id: crypto.randomUUID(), name, memberCount: 1, createdAt };
@@ -49,7 +70,10 @@ function Screens(): ReactNode {
   }
   if (state.kind === "clear") {
     return (
-      <Pressable testID="sign-in" onPress={() => signIn({ email: "an@example.com", code: "1" })} />
+      <Pressable
+        testID="sign-in"
+        onPress={() => signIn({ email: "an@example.com", code: "123456" })}
+      />
     );
   }
   return <Home />;
@@ -65,9 +89,10 @@ async function renderApp() {
 
 beforeEach(async () => {
   jest.resetAllMocks();
-  const { authApi, fetchHealth } = jest.requireMock("@/lib/api");
-  fetchHealth.mockResolvedValue({ status: "ok", db: "ok" });
-  authApi.me.mockResolvedValue({ ok: true, data: { email: "an@example.com" } });
+  jest.mocked(fetchHealth).mockResolvedValue({ status: "ok", db: "up", version: "test" });
+  me.mockResolvedValue({ ok: true, data: user });
+  signOutApi.mockResolvedValue({ ok: true, data: null });
+  signInApi.mockResolvedValue({ ok: true, data: { token: "new-token", user } });
   await secureSessionStore.set("old-token");
 });
 
@@ -93,4 +118,61 @@ test("a create after a failed first load lists the new group and the others", as
     "Nha",
   ]);
   expect(listGroups).toHaveBeenCalledTimes(2);
+});
+
+/**
+ * fireEvent.press hands back the handler's promise, so awaiting it waits for the create this test
+ * holds open, and not awaiting it leaves React's act scope overlapping. The press reaches the
+ * button as an `onClick` on its native view, which this calls inside its own act.
+ */
+async function tapWithoutWaiting(testID: string) {
+  const { onClick } = screen.getByTestId(testID).props;
+  await act(async () => {
+    onClick({ stopPropagation() {}, preventDefault() {}, nativeEvent: {} });
+  });
+}
+
+/** Signs out on the home screen, then signs in again on the stand-in sign-in screen. */
+async function signOutAndSignInAgain() {
+  await fireEvent.press(screen.getByTestId("sign-out"));
+  await fireEvent.press(await screen.findByTestId("sign-in"));
+  await screen.findByTestId("signed-in-email");
+  expect(await secureSessionStore.get()).toBe("new-token");
+}
+
+// #23 AC 3: a request that outlived the home screen must not expire the next sign-in.
+test("a groups list still pending at sign-out answers 401 after the next sign-in", async () => {
+  const late = deferred<Awaited<ReturnType<typeof groupsApi.listGroups>>>();
+  listGroups
+    .mockReturnValueOnce(late.promise)
+    .mockResolvedValueOnce({ ok: true, data: { groups: [] } });
+
+  await renderApp();
+  await screen.findByTestId("signed-in-email");
+  await signOutAndSignInAgain();
+
+  late.resolve({ ok: false, error: "unauthorized" });
+  await settle();
+
+  expect(await secureSessionStore.get()).toBe("new-token");
+  expect(screen.getByTestId("signed-in-email")).toBeTruthy();
+});
+
+test("a group create still pending at sign-out answers 401 after the next sign-in", async () => {
+  const late = deferred<Awaited<ReturnType<typeof groupsApi.createGroup>>>();
+  listGroups.mockResolvedValue({ ok: true, data: { groups: [] } });
+  createGroup.mockReturnValueOnce(late.promise);
+
+  await renderApp();
+  await screen.findByTestId("groups-empty");
+  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+  await tapWithoutWaiting("create-group");
+  expect(createGroup).toHaveBeenCalledTimes(1);
+  await signOutAndSignInAgain();
+
+  late.resolve({ ok: false, error: "unauthorized" });
+  await settle();
+
+  expect(await secureSessionStore.get()).toBe("new-token");
+  expect(screen.getByTestId("signed-in-email")).toBeTruthy();
 });
