@@ -353,3 +353,50 @@ test("[security] a retry pending at sign-out answers 401 after the next sign-in"
   expect(await secureSessionStore.get()).toBe("new-token");
   expect(screen.getByTestId("signed-in-email")).toBeTruthy();
 });
+
+// #21 A5: when two loads overlap, the one that started last is the one shown.
+test("a retry's older answer doesn't overwrite the list a create reloaded", async () => {
+  const existing = group("Nha", "2026-11-01T00:00:00.000Z");
+  const created = group("Da Lat", "2026-11-02T00:00:00.000Z");
+  const older = deferred<ListAnswer>();
+  listGroups
+    .mockResolvedValueOnce(unavailable)
+    .mockReturnValueOnce(older.promise)
+    .mockResolvedValueOnce({ ok: true, data: { groups: [created, existing] } });
+  createGroup.mockResolvedValue({ ok: true, data: created });
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+  await tapWithoutWaiting("groups-retry");
+  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+  await fireEvent.press(screen.getByTestId("create-group"));
+  await screen.findByText("Da Lat");
+
+  older.resolve({ ok: true, data: { groups: [existing] } });
+  await settle();
+
+  expect(screen.getAllByTestId("group-name").map((node) => node.props.children)).toEqual([
+    "Da Lat",
+    "Nha",
+  ]);
+});
+
+// #21 A7: the create form works while the first load is still pending.
+test("a group can be created while the first load is pending", async () => {
+  const created = group("Da Lat", "2026-11-02T00:00:00.000Z");
+  const first = deferred<ListAnswer>();
+  listGroups
+    .mockReturnValueOnce(first.promise)
+    .mockResolvedValueOnce({ ok: true, data: { groups: [created] } });
+  createGroup.mockResolvedValue({ ok: true, data: created });
+
+  await renderApp();
+  await screen.findByTestId("groups-loading");
+  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+  await fireEvent.press(screen.getByTestId("create-group"));
+  await screen.findByText("Da Lat");
+
+  expect(createGroup).toHaveBeenCalledTimes(1);
+  first.resolve({ ok: true, data: { groups: [] } });
+  await settle();
+});

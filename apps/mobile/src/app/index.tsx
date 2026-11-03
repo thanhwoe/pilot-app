@@ -81,10 +81,14 @@ function Groups() {
   // `retrying` ignores a second press of "Thử lại" before the next render hides the button.
   const retrying = useRef(false);
 
+  // Counts the loads, so only the answer to the one that started last is shown.
+  const latestLoad = useRef(0);
+
   /** Asks for the list and shows the answer. */
   const load = useCallback(async () => {
+    const thisLoad = ++latestLoad.current;
     const state = await loadMyGroups();
-    if (!mounted.current) {
+    if (!mounted.current || thisLoad !== latestLoad.current) {
       return;
     }
     // The API rejected the session: sign-in replaces this screen.
@@ -140,12 +144,7 @@ function Groups() {
         setGroups({ kind: "loaded", groups: [outcome.group, ...groups.groups] });
       } else {
         // The first load failed: ask again rather than show the new group as the only one.
-        const state = await loadMyGroups();
-        if (state.kind === "signed-out") {
-          await expireIfShown();
-          return;
-        }
-        setGroups(state);
+        await load();
       }
     } finally {
       inFlight.current = false;
