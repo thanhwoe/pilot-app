@@ -5,7 +5,7 @@ import {
   groupsCopy,
   type HealthResponse,
 } from "@gop/shared";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
 import { createMyGroup, loadMyGroups } from "@/lib/groups";
@@ -78,23 +78,44 @@ function Groups() {
     }
   }
 
+  // `retrying` ignores a second press of "Thử lại" before the next render hides the button.
+  const retrying = useRef(false);
+
+  /** Asks for the list and shows the answer. */
+  const load = useCallback(async () => {
+    const state = await loadMyGroups();
+    if (!mounted.current) {
+      return;
+    }
+    // The API rejected the session: sign-in replaces this screen.
+    if (state.kind === "signed-out") {
+      expire();
+      return;
+    }
+    setGroups(state);
+  }, [expire]);
+
   useEffect(() => {
     mounted.current = true;
-    loadMyGroups().then((state) => {
-      if (!mounted.current) {
-        return;
-      }
-      // The API rejected the session: sign-in replaces this screen.
-      if (state.kind === "signed-out") {
-        expire();
-        return;
-      }
-      setGroups(state);
-    });
+    load();
     return () => {
       mounted.current = false;
     };
-  }, [expire]);
+  }, [load]);
+
+  async function retry() {
+    if (retrying.current) {
+      return;
+    }
+    retrying.current = true;
+    // Back to the loading line until the request answers.
+    setGroups(null);
+    try {
+      await load();
+    } finally {
+      retrying.current = false;
+    }
+  }
 
   async function create() {
     if (inFlight.current) {
@@ -164,9 +185,14 @@ function Groups() {
       </Pressable>
       {groups === null && <Text testID="groups-loading">{groupsCopy.loading}</Text>}
       {groups?.kind === "unavailable" && (
-        <Text testID="groups-error" style={styles.error}>
-          {groupsCopy.unavailable}
-        </Text>
+        <>
+          <Text testID="groups-error" style={styles.error}>
+            {groupsCopy.unavailable}
+          </Text>
+          <Pressable testID="groups-retry" style={styles.button} onPress={retry}>
+            <Text style={styles.buttonText}>{groupsCopy.retry}</Text>
+          </Pressable>
+        </>
       )}
       {groups?.kind === "loaded" && groups.groups.length === 0 && (
         <Text testID="groups-empty">{groupsCopy.empty}</Text>

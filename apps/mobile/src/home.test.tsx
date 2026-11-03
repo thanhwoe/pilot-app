@@ -219,3 +219,102 @@ test("the list area shows the loading line while the first load is pending", asy
   await screen.findByTestId("groups-empty");
   expect(screen.queryByTestId("groups-loading")).toBeNull();
 });
+
+type ListAnswer = Awaited<ReturnType<typeof groupsApi.listGroups>>;
+const unavailable: ListAnswer = { ok: false, error: "unavailable" };
+
+/** Presses a button twice before React can re-render, as a fast double tap does. */
+async function pressTwiceWithoutWaiting(testID: string) {
+  const { onClick } = screen.getByTestId(testID).props;
+  const press = { stopPropagation() {}, preventDefault() {}, nativeEvent: {} };
+  await act(async () => {
+    onClick(press);
+    onClick(press);
+  });
+}
+
+// #21 AC 2: a failed first load offers a retry under the connection error.
+test("a failed first load shows the connection error with a retry button", async () => {
+  listGroups.mockResolvedValue(unavailable);
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+
+  expect(screen.getByTestId("groups-retry")).toBeTruthy();
+  expect(screen.getByText("Thử lại")).toBeTruthy();
+  expect(screen.queryByTestId("groups-loading")).toBeNull();
+});
+
+// #21 AC 3: a retry shows the loading line in place of the error, then the list or the empty state.
+test.each([
+  ["my groups", [group("Nha", "2026-11-01T00:00:00.000Z")]],
+  ["the empty state", []],
+])("a retry with the API back shows the loading line, then %s", async (_name, groups) => {
+  const held = deferred<ListAnswer>();
+  listGroups.mockResolvedValueOnce(unavailable).mockReturnValueOnce(held.promise);
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+  await tapWithoutWaiting("groups-retry");
+
+  expect(screen.getByTestId("groups-loading").props.children).toBe("Đang tải nhóm…");
+  expect(screen.queryByTestId("groups-error")).toBeNull();
+  expect(screen.queryByTestId("groups-retry")).toBeNull();
+
+  held.resolve({ ok: true, data: { groups } });
+  await settle();
+
+  expect(screen.queryByTestId("groups-loading")).toBeNull();
+  expect(screen.queryByTestId("groups-error")).toBeNull();
+  expect(screen.queryByTestId("groups-retry")).toBeNull();
+  if (groups.length === 0) {
+    expect(screen.getByTestId("groups-empty")).toBeTruthy();
+  } else {
+    expect(screen.getAllByTestId("group-name").map((node) => node.props.children)).toEqual(["Nha"]);
+  }
+});
+
+// #21 AC 4: a retry with the API still down brings the error and the button back.
+test("a retry with the API still down shows the connection error and the retry button again", async () => {
+  listGroups.mockResolvedValue(unavailable);
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+  await fireEvent.press(screen.getByTestId("groups-retry"));
+  await screen.findByTestId("groups-error");
+
+  expect(screen.getByTestId("groups-retry")).toBeTruthy();
+  expect(screen.queryByTestId("groups-loading")).toBeNull();
+  expect(listGroups).toHaveBeenCalledTimes(2);
+});
+
+// #21 AC 6: a list that loaded fine has no retry button and loads once.
+test("a list that loaded fine has no retry button", async () => {
+  listGroups.mockResolvedValue({
+    ok: true,
+    data: { groups: [group("Nha", "2026-11-01T00:00:00.000Z")] },
+  });
+
+  await renderApp();
+  await screen.findByText("Nha");
+
+  expect(screen.queryByTestId("groups-retry")).toBeNull();
+  expect(screen.queryByTestId("groups-loading")).toBeNull();
+  expect(listGroups).toHaveBeenCalledTimes(1);
+});
+
+// #21 A4: two presses before a re-render send one request. The button is only gone from the next
+// render, so only a guard can stop the second press.
+test("two presses on retry before a re-render send one list request", async () => {
+  const held = deferred<ListAnswer>();
+  listGroups.mockResolvedValueOnce(unavailable).mockReturnValueOnce(held.promise);
+
+  await renderApp();
+  await screen.findByTestId("groups-error");
+  await pressTwiceWithoutWaiting("groups-retry");
+
+  expect(listGroups).toHaveBeenCalledTimes(2);
+
+  held.resolve({ ok: true, data: { groups: [] } });
+  await settle();
+});
