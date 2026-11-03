@@ -1,3 +1,4 @@
+import { groupsCopy } from "@gop/shared";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { Pressable } from "react-native";
@@ -202,3 +203,54 @@ test("two presses on create before a re-render create one group", async () => {
     "Hoi An",
   ]);
 });
+
+// #31 AC 6: a 401 on any call shows sign-in and deletes the token, instead of a retry message.
+test("[security] a 401 on the groups list deletes the token and shows sign-in", async () => {
+  listGroups.mockResolvedValue({ ok: false, error: "unauthorized" });
+
+  await renderApp();
+
+  await screen.findByTestId("sign-in");
+  expect(await secureSessionStore.get()).toBeNull();
+});
+
+test("[security] a 401 on a group create deletes the token and shows sign-in", async () => {
+  listGroups.mockResolvedValue({ ok: true, data: { groups: [] } });
+  createGroup.mockResolvedValue({ ok: false, error: "unauthorized" });
+
+  await renderApp();
+  await screen.findByTestId("groups-empty");
+  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+  await fireEvent.press(screen.getByTestId("create-group"));
+
+  await screen.findByTestId("sign-in");
+  expect(await secureSessionStore.get()).toBeNull();
+});
+
+// #31 AC 7: a failure that isn't a rejected session shows the connection error and keeps the token.
+test("[security] a groups list that fails shows the connection error and keeps the token", async () => {
+  listGroups.mockResolvedValue({ ok: false, error: "unavailable" });
+
+  await renderApp();
+
+  expect((await screen.findByTestId("groups-error")).props.children).toBe(groupsCopy.unavailable);
+  expect(await secureSessionStore.get()).toBe("old-token");
+});
+
+test.each(["unavailable", "not_found", "too_many_requests"] as const)(
+  "[security] a group create answering %s shows the error and keeps the token",
+  async (error) => {
+    listGroups.mockResolvedValue({ ok: true, data: { groups: [] } });
+    createGroup.mockResolvedValue({ ok: false, error });
+
+    await renderApp();
+    await screen.findByTestId("groups-empty");
+    await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+    await fireEvent.press(screen.getByTestId("create-group"));
+
+    expect((await screen.findByTestId("group-form-error")).props.children).toBe(
+      groupsCopy.unavailable,
+    );
+    expect(await secureSessionStore.get()).toBe("old-token");
+  },
+);

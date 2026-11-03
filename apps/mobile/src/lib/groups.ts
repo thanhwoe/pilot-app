@@ -34,3 +34,15 @@ export async function createMyGroup(name: string): Promise<CreateGroupOutcome> {
   }
   return submitGroup(groupsApi, token, { name });
 }
+
+/** The list answered that the API rejected the session. */
+export function isListSignedOut(state: GroupsState): state is { kind: "signed-out" } {
+  return state.kind === "signed-out";
+}
+
+/** The create answered that the API rejected the session. */
+export function isCreateSignedOut(
+  outcome: CreateGroupOutcome,
+): outcome is { created: false; signedOut: true } {
+  return "signedOut" in outcome;
+}
