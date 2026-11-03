@@ -176,3 +176,29 @@ test("a group create still pending at sign-out answers 401 after the next sign-i
   expect(await secureSessionStore.get()).toBe("new-token");
   expect(screen.getByTestId("signed-in-email")).toBeTruthy();
 });
+
+// #23 AC 1: a double tap creates one group. Both presses land before React re-renders, so the
+// `disabled` button can't stop the second one; only the `inFlight` guard can. Maestro taps too
+// slowly to reach this (see groups-double-tap.yaml).
+test("two presses on create before a re-render create one group", async () => {
+  const held = deferred<Awaited<ReturnType<typeof groupsApi.createGroup>>>();
+  listGroups.mockResolvedValue({ ok: true, data: { groups: [] } });
+  createGroup.mockReturnValue(held.promise);
+
+  await renderApp();
+  await screen.findByTestId("groups-empty");
+  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Hoi An");
+  const { onClick } = screen.getByTestId("create-group").props;
+  const press = { stopPropagation() {}, preventDefault() {}, nativeEvent: {} };
+  await act(async () => {
+    onClick(press);
+    onClick(press);
+  });
+  held.resolve({ ok: true, data: group("Hoi An", "2026-11-03T00:00:00.000Z") });
+  await settle();
+
+  expect(createGroup).toHaveBeenCalledTimes(1);
+  expect(screen.getAllByTestId("group-name").map((node) => node.props.children)).toEqual([
+    "Hoi An",
+  ]);
+});

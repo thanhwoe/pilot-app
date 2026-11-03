@@ -1,0 +1,41 @@
+# #23 AC 1: double-tapping "Tạo nhóm" with no groups lists exactly one group, with "1 thành viên".
+# This checks the screen, not the `inFlight` guard in index.tsx: Maestro taps too slowly to beat
+# the re-render that disables the button, so this flow passes with the guard removed. The guard's
+# own test is in src/home.test.tsx. The account starts with no groups, so a second `group-name` row
+# (index 1) can only be a duplicate. A relaunch then shows the list the API stored.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- assertVisible:
+    id: groups-empty
+- tapOn:
+    id: group-name-input
+- inputText: Hoi An
+- hideKeyboard
+- doubleTapOn:
+    id: create-group
+    text: Tạo nhóm
+- assertVisible:
+    id: group-name
+    text: Hoi An
+- assertVisible:
+    id: group-member-count
+    text: 1 thành viên
+- assertNotVisible:
+    id: groups-empty
+- assertNotVisible:
+    id: group-name
+    index: 1
+- assertNotVisible:
+    id: group-member-count
+    index: 1
+- stopApp
+- launchApp
+- assertVisible:
+    id: group-name
+    text: Hoi An
+- assertNotVisible:
+    id: group-name
+    index: 1
