@@ -62,7 +62,9 @@ test("AC 16: a name of only spaces shows the empty-name error and creates no gro
   await expect(page.getByText("Bạn chưa có nhóm nào.")).toBeVisible();
 });
 
-test("AC 2: a name of only spaces keeps what I typed in the field", async ({ page }, testInfo) => {
+test("#20 AC 2: a name of only spaces keeps what I typed in the field", async ({
+  page,
+}, testInfo) => {
   await signIn(page, uniqueEmail(testInfo));
 
   await createGroup(page, "   ");
@@ -72,7 +74,7 @@ test("AC 2: a name of only spaces keeps what I typed in the field", async ({ pag
   await expect(page.getByText("Bạn chưa có nhóm nào.")).toBeVisible();
 });
 
-test("AC 3: a valid name after a failed create creates the group and clears the field", async ({
+test("#20 AC 3: a valid name after a failed create creates the group and clears the field", async ({
   page,
 }, testInfo) => {
   await signIn(page, uniqueEmail(testInfo));
