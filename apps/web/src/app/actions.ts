@@ -5,6 +5,7 @@ import { refresh } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authApi, groupsApi } from "@/lib/api";
+import { endRejectedSessionInAction } from "@/lib/rejected-session";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
 
 /** Ends the session on the API and clears the cookie, even if the API call fails. */
@@ -36,9 +37,7 @@ export async function createGroupAction(
   });
   if (!outcome.created) {
     if ("signedOut" in outcome) {
-      // The API rejected the session: remove the cookie and show sign-in, not a retry message.
-      cookieStore.delete(SESSION_COOKIE);
-      redirect("/sign-in");
+      return endRejectedSessionInAction();
     }
     return { error: outcome.error };
   }

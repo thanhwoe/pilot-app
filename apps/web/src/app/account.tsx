@@ -1,7 +1,7 @@
 import { accountState, signInCopy as copy } from "@gop/shared";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { authApi } from "@/lib/api";
+import { redirectRejectedSessionFromComponent } from "@/lib/rejected-session";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
 import { signOutAction } from "./actions";
 
@@ -11,8 +11,7 @@ export async function Account() {
   const state = accountState(token ? await authApi().me(token) : null);
 
   if (state.kind === "clear") {
-    // A Server Component can't change cookies; the route handler removes it.
-    redirect("/session/clear");
+    redirectRejectedSessionFromComponent();
   }
   return (
     <div className="account">
