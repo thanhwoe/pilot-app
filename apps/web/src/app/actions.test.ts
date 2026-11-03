@@ -42,7 +42,6 @@ describe("createGroupAction", () => {
 
   it.each([
     ["the API is unreachable", { ok: false, error: "unavailable" }, groupsCopy.unavailable],
-    ["a timeout or a 5xx", { ok: false, error: "unavailable" }, groupsCopy.unavailable],
     ["a 404", { ok: false, error: "not_found" }, groupsCopy.unavailable],
     ["a 429", { ok: false, error: "too_many_requests" }, groupsCopy.unavailable],
     ["a 400", { ok: false, error: "invalid_request" }, groupsCopy.nameRequired],

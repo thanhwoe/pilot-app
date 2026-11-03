@@ -9,6 +9,11 @@ export type GroupsState =
   | { kind: "unavailable" }
   | { kind: "signed-out" };
 
+/** The list answered that the API rejected the session. */
+export function isListSignedOut(state: GroupsState): state is { kind: "signed-out" } {
+  return state.kind === "signed-out";
+}
+
 /**
  * The signed-in member's groups, newest first. A session the API rejects means signed out; any
  * other failure shows the connection error.
@@ -26,6 +31,13 @@ export type CreateGroupOutcome =
   | { created: true; group: Group }
   | { created: false; error: string }
   | { created: false; signedOut: true };
+
+/** The create answered that the API rejected the session. */
+export function isCreateSignedOut(
+  outcome: CreateGroupOutcome,
+): outcome is { created: false; signedOut: true } {
+  return "signedOut" in outcome;
+}
 
 /**
  * The create form: checks the name with the shared schema, then creates the group. The name

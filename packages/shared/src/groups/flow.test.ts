@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { signInCopy } from "../sign-in/copy";
 import type { GroupsApi } from "./api";
 import { groupsCopy } from "./copy";
-import { loadGroups, submitGroup } from "./flow";
+import { isCreateSignedOut, isListSignedOut, loadGroups, submitGroup } from "./flow";
 
 const group = {
   id: "0b6f8f5e-7a63-4f1f-9d1e-2f4c1a3b5c6d",
@@ -111,5 +111,21 @@ describe("groupsCopy", () => {
     });
     expect(groupsCopy.memberCount(1)).toBe("1 thành viên");
     expect(groupsCopy.memberCount(12)).toBe("12 thành viên");
+  });
+});
+
+describe("isListSignedOut", () => {
+  it("is true only for the signed-out list state", () => {
+    expect(isListSignedOut({ kind: "signed-out" })).toBe(true);
+    expect(isListSignedOut({ kind: "unavailable" })).toBe(false);
+    expect(isListSignedOut({ kind: "loaded", groups: [group] })).toBe(false);
+  });
+});
+
+describe("isCreateSignedOut", () => {
+  it("is true only for the signed-out create outcome", () => {
+    expect(isCreateSignedOut({ created: false, signedOut: true })).toBe(true);
+    expect(isCreateSignedOut({ created: false, error: signInCopy.unavailable })).toBe(false);
+    expect(isCreateSignedOut({ created: true, group })).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 "use server";
 
-import { signOut, submitGroup } from "@gop/shared";
+import { isCreateSignedOut, signOut, submitGroup } from "@gop/shared";
 import { refresh } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -36,7 +36,7 @@ export async function createGroupAction(
     name: typeof name === "string" ? name : "",
   });
   if (!outcome.created) {
-    if ("signedOut" in outcome) {
+    if (isCreateSignedOut(outcome)) {
       return endRejectedSessionInAction();
     }
     return { error: outcome.error };

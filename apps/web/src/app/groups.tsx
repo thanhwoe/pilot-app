@@ -1,4 +1,4 @@
-import { groupsCopy as copy, loadGroups } from "@gop/shared";
+import { groupsCopy as copy, isListSignedOut, loadGroups } from "@gop/shared";
 import { cookies } from "next/headers";
 import { groupsApi } from "@/lib/api";
 import { redirectRejectedSessionFromComponent } from "@/lib/rejected-session";
@@ -13,7 +13,7 @@ export async function Groups() {
     return null;
   }
   const state = await loadGroups(groupsApi(), token);
-  if (state.kind === "signed-out") {
+  if (isListSignedOut(state)) {
     redirectRejectedSessionFromComponent();
   }
 

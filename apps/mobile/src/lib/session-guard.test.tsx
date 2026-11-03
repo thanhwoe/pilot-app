@@ -4,19 +4,7 @@ import { SessionProvider } from "@/lib/session";
 import { useSessionGuard } from "@/lib/session-guard";
 import { secureSessionStore } from "@/lib/session-store";
 
-jest.mock("expo-secure-store", () => {
-  const items = new Map<string, string>();
-  // Plain functions, not jest.fn: resetAllMocks in beforeEach would wipe their behaviour.
-  return {
-    getItemAsync: async (key: string) => items.get(key) ?? null,
-    setItemAsync: async (key: string, value: string) => {
-      items.set(key, value);
-    },
-    deleteItemAsync: async (key: string) => {
-      items.delete(key);
-    },
-  };
-});
+jest.mock("expo-secure-store", () => require("@/test-support/secure-store-mock").secureStoreMock());
 
 jest.mock("@/lib/api", () => ({
   authApi: { requestCode: jest.fn(), signIn: jest.fn(), me: jest.fn(), signOut: jest.fn() },

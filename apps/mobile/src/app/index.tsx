@@ -4,11 +4,13 @@ import {
   type GroupsState,
   groupsCopy,
   type HealthResponse,
+  isCreateSignedOut,
+  isListSignedOut,
 } from "@gop/shared";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
-import { createMyGroup, isCreateSignedOut, isListSignedOut, loadMyGroups } from "@/lib/groups";
+import { createMyGroup, loadMyGroups } from "@/lib/groups";
 import { useSession } from "@/lib/session";
 import { useSessionGuard } from "@/lib/session-guard";
 
