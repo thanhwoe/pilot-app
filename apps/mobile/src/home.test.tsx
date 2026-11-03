@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { Pressable } from "react-native";
+import Home from "@/app/index";
 import { authApi, fetchHealth, groupsApi } from "@/lib/api";
 import { SessionProvider, useSession } from "@/lib/session";
 import { secureSessionStore } from "@/lib/session-store";
-import Home from "./index";
 
 // The real home screen, session provider and shared flows run here. Only the network is faked
 // (the API clients) and the keychain (an in-memory store).
