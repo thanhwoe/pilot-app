@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     // The shared API client uses fetch, Response and AbortController.
-    "lib": ["ES2023", "DOM"]
+    "lib": ["ES2023", "DOM"],
+    // Only the usage test reads files; the shared code itself runs on web and mobile.
+    "types": ["node"]
   },
   "include": ["src"]
 }
