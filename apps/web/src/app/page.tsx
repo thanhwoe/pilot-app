@@ -1,3 +1,4 @@
+import { groupsCopy } from "@gop/shared";
 import { Suspense } from "react";
 import { Account } from "./account";
 import { ApiStatus } from "./api-status";
@@ -11,7 +12,7 @@ export default function Home() {
       <Suspense fallback={<p className="status">Đang tải tài khoản…</p>}>
         <Account />
       </Suspense>
-      <Suspense fallback={<p className="status">Đang tải nhóm…</p>}>
+      <Suspense fallback={<p className="status">{groupsCopy.loading}</p>}>
         <Groups />
       </Suspense>
       <Suspense fallback={<p className="status">Đang kiểm tra API…</p>}>
