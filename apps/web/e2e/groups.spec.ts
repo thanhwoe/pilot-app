@@ -62,6 +62,35 @@ test("AC 16: a name of only spaces shows the empty-name error and creates no gro
   await expect(page.getByText("Bạn chưa có nhóm nào.")).toBeVisible();
 });
 
+test("#20 AC 2: a name of only spaces keeps what I typed in the field", async ({
+  page,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+
+  await createGroup(page, "   ");
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText("Hãy nhập tên nhóm.");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("   ");
+  await expect(page.getByText("Bạn chưa có nhóm nào.")).toBeVisible();
+});
+
+test("#20 AC 3: a valid name after a failed create creates the group and clears the field", async ({
+  page,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  await createGroup(page, "   ");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("   ");
+
+  await createGroup(page, "Đà Lạt");
+
+  const items = groupsList(page).getByRole("listitem");
+  await expect(items).toHaveCount(1);
+  await expect(items.first()).toContainText("Đà Lạt");
+  await expect(items.first()).toContainText("1 thành viên");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
+  await expect(page.locator("main").getByRole("alert")).toBeHidden();
+});
+
 test("createGroupAction without a session sends me to sign-in", async ({ page }, testInfo) => {
   await signIn(page, uniqueEmail(testInfo));
   await page.context().clearCookies();

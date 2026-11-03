@@ -1,4 +1,5 @@
 import { createGroupBodySchema, type Group } from "../groups";
+import { guardSession } from "../session-guard";
 import type { GroupsApi } from "./api";
 import { groupsCopy as copy } from "./copy";
 
@@ -8,16 +9,21 @@ export type GroupsState =
   | { kind: "unavailable" }
   | { kind: "signed-out" };
 
+/** The list answered that the API rejected the session. */
+export function isListSignedOut(state: GroupsState): state is { kind: "signed-out" } {
+  return state.kind === "signed-out";
+}
+
 /**
  * The signed-in member's groups, newest first. A session the API rejects means signed out; any
  * other failure shows the connection error.
  */
 export async function loadGroups(api: GroupsApi, token: string): Promise<GroupsState> {
-  const result = await api.listGroups(token);
-  if (result.ok) {
+  const result = guardSession(await api.listGroups(token));
+  if (result.kind === "ok") {
     return { kind: "loaded", groups: result.data.groups };
   }
-  return result.error === "unauthorized" ? { kind: "signed-out" } : { kind: "unavailable" };
+  return result.kind === "signed-out" ? { kind: "signed-out" } : { kind: "unavailable" };
 }
 
 /** `signedOut`: the API rejected the session, so the app shows sign-in instead of an error. */
@@ -25,6 +31,13 @@ export type CreateGroupOutcome =
   | { created: true; group: Group }
   | { created: false; error: string }
   | { created: false; signedOut: true };
+
+/** The create answered that the API rejected the session. */
+export function isCreateSignedOut(
+  outcome: CreateGroupOutcome,
+): outcome is { created: false; signedOut: true } {
+  return "signedOut" in outcome;
+}
 
 /**
  * The create form: checks the name with the shared schema, then creates the group. The name
@@ -39,11 +52,11 @@ export async function submitGroup(
   if (!body.success) {
     return { created: false, error: copy.nameRequired };
   }
-  const result = await api.createGroup(token, body.data);
-  if (!result.ok) {
-    if (result.error === "unauthorized") {
-      return { created: false, signedOut: true };
-    }
+  const result = guardSession(await api.createGroup(token, body.data));
+  if (result.kind === "signed-out") {
+    return { created: false, signedOut: true };
+  }
+  if (result.kind === "failed") {
     return {
       created: false,
       error: result.error === "invalid_request" ? copy.nameRequired : copy.unavailable,

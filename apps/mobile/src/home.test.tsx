@@ -1,3 +1,4 @@
+import { groupsCopy } from "@gop/shared";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { Pressable } from "react-native";
@@ -8,23 +9,7 @@ import { secureSessionStore } from "@/lib/session-store";
 
 // The real home screen, session provider and shared flows run here. Only the network is faked
 // (the API clients) and the keychain (an in-memory store).
-// A test can hold the token deletion open by setting this to a promise it resolves later.
-let mockHoldDelete: Promise<void> | null = null;
-
-jest.mock("expo-secure-store", () => {
-  const items = new Map<string, string>();
-  // Plain functions, not jest.fn: resetAllMocks in beforeEach would wipe their behaviour.
-  return {
-    getItemAsync: async (key: string) => items.get(key) ?? null,
-    setItemAsync: async (key: string, value: string) => {
-      items.set(key, value);
-    },
-    deleteItemAsync: async (key: string) => {
-      await mockHoldDelete;
-      items.delete(key);
-    },
-  };
-});
+jest.mock("expo-secure-store", () => require("@/test-support/secure-store-mock").secureStoreMock());
 
 jest.mock("@/lib/api", () => ({
   apiUrl: "http://api.test",
@@ -92,7 +77,6 @@ async function renderApp() {
 }
 
 beforeEach(async () => {
-  mockHoldDelete = null;
   jest.resetAllMocks();
   jest.mocked(fetchHealth).mockResolvedValue({ status: "ok", db: "up", version: "test" });
   me.mockResolvedValue({ ok: true, data: user });
@@ -207,6 +191,57 @@ test("two presses on create before a re-render create one group", async () => {
     "Hoi An",
   ]);
 });
+
+// #31 AC 6: a 401 on any call shows sign-in and deletes the token, instead of a retry message.
+test("[security] a 401 on the groups list deletes the token and shows sign-in", async () => {
+  listGroups.mockResolvedValue({ ok: false, error: "unauthorized" });
+
+  await renderApp();
+
+  await screen.findByTestId("sign-in");
+  expect(await secureSessionStore.get()).toBeNull();
+});
+
+test("[security] a 401 on a group create deletes the token and shows sign-in", async () => {
+  listGroups.mockResolvedValue({ ok: true, data: { groups: [] } });
+  createGroup.mockResolvedValue({ ok: false, error: "unauthorized" });
+
+  await renderApp();
+  await screen.findByTestId("groups-empty");
+  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+  await fireEvent.press(screen.getByTestId("create-group"));
+
+  await screen.findByTestId("sign-in");
+  expect(await secureSessionStore.get()).toBeNull();
+});
+
+// #31 AC 7: a failure that isn't a rejected session shows the connection error and keeps the token.
+test("[security] a groups list that fails shows the connection error and keeps the token", async () => {
+  listGroups.mockResolvedValue({ ok: false, error: "unavailable" });
+
+  await renderApp();
+
+  expect((await screen.findByTestId("groups-error")).props.children).toBe(groupsCopy.unavailable);
+  expect(await secureSessionStore.get()).toBe("old-token");
+});
+
+test.each(["unavailable", "not_found", "too_many_requests"] as const)(
+  "[security] a group create answering %s shows the error and keeps the token",
+  async (error) => {
+    listGroups.mockResolvedValue({ ok: true, data: { groups: [] } });
+    createGroup.mockResolvedValue({ ok: false, error });
+
+    await renderApp();
+    await screen.findByTestId("groups-empty");
+    await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+    await fireEvent.press(screen.getByTestId("create-group"));
+
+    expect((await screen.findByTestId("group-form-error")).props.children).toBe(
+      groupsCopy.unavailable,
+    );
+    expect(await secureSessionStore.get()).toBe("old-token");
+  },
+);
 
 // #21 AC 1: while the first load is pending, the list area says so.
 test("the list area shows the loading line while the first load is pending", async () => {
@@ -411,22 +446,31 @@ test("a group can be created while the first load is pending", async () => {
 test("[security] a create whose reload answers 401 stays busy until the token is deleted", async () => {
   const created = group("Da Lat", "2026-11-02T00:00:00.000Z");
   const tokenDeleted = deferred<void>();
+  // The token deletion waits for the test; it then deletes for real.
+  const deleteToken = secureSessionStore.delete;
+  const holdDelete = jest.spyOn(secureSessionStore, "delete").mockImplementation(async () => {
+    await tokenDeleted.promise;
+    await deleteToken();
+  });
   listGroups
     .mockResolvedValueOnce(unavailable)
     .mockResolvedValueOnce({ ok: false, error: "unauthorized" });
   createGroup.mockResolvedValue({ ok: true, data: created });
 
-  await renderApp();
-  await screen.findByTestId("groups-error");
-  await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
-  mockHoldDelete = tokenDeleted.promise;
-  await tapWithoutWaiting("create-group");
-  await settle();
+  try {
+    await renderApp();
+    await screen.findByTestId("groups-error");
+    await fireEvent.changeText(screen.getByTestId("group-name-input"), "Da Lat");
+    await tapWithoutWaiting("create-group");
+    await settle();
 
-  expect(listGroups).toHaveBeenCalledTimes(2);
-  expect(screen.getByTestId("create-group").props.accessibilityState.disabled).toBe(true);
+    expect(listGroups).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("create-group").props.accessibilityState.disabled).toBe(true);
 
-  tokenDeleted.resolve();
-  await screen.findByTestId("sign-in");
-  expect(await secureSessionStore.get()).toBeNull();
+    tokenDeleted.resolve();
+    await screen.findByTestId("sign-in");
+    expect(await secureSessionStore.get()).toBeNull();
+  } finally {
+    holdDelete.mockRestore();
+  }
 });

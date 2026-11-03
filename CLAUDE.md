@@ -33,6 +33,7 @@ Before you say a change is done, run `pnpm lint && pnpm typecheck && pnpm test`.
 
 - **Money:** whole VND as integers. No floats, no decimals, one currency per group.
 - **Shared contracts:** every request and response body has a Zod schema in `packages/shared`. The API returns that type, and web and mobile parse with that schema.
+- **Rejected session:** a call that sends the session token goes through `guardSession` in `packages/shared`, and only a 401 `unauthorized` ends the session. On the web, use `endRejectedSessionInAction` (Server Actions) or `redirectRejectedSessionFromComponent` (Server Components) from `apps/web/src/lib/rejected-session.ts`. On mobile, use `useSessionGuard` from `apps/mobile/src/lib/session-guard.ts`. Never handle a 401 in a screen.
 - **Domain logic** (balances, splits, settlements) is pure functions in `packages/shared` with unit tests. Keep it out of route handlers and components.
 - **Tests first:** write tests from the issue's Given/When/Then acceptance criteria before the code.
 - **API:** `buildApp(deps)` in `apps/api/src/app.ts` takes its dependencies, so tests call it with `app.inject` and fakes. Only `server.ts` touches the real database and network.

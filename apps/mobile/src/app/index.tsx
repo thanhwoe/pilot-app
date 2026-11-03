@@ -4,12 +4,15 @@ import {
   type GroupsState,
   groupsCopy,
   type HealthResponse,
+  isCreateSignedOut,
+  isListSignedOut,
 } from "@gop/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
 import { createMyGroup, loadMyGroups } from "@/lib/groups";
 import { useSession } from "@/lib/session";
+import { useSessionGuard } from "@/lib/session-guard";
 
 type State = { kind: "loading" } | { kind: "ok"; health: HealthResponse } | { kind: "error" };
 
@@ -61,50 +64,30 @@ export default function Home() {
 
 /** My groups, newest first, and the form to create one. */
 function Groups() {
-  const { expire } = useSession();
+  const guard = useSessionGuard();
   const [groups, setGroups] = useState<GroupsState | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   // `creating` disables the button only from the next render; this stops a second fast tap.
   const inFlight = useRef(false);
-  // A request still pending when this screen goes away (say, the user signed out) must not expire
-  // the session: by the time it answers, the stored token may belong to a new sign-in.
-  const mounted = useRef(true);
-
-  async function expireIfShown() {
-    if (mounted.current) {
-      await expire();
-    }
-  }
 
   // `retrying` ignores a second press of "Thử lại" before the next render hides the button.
   const retrying = useRef(false);
-
   // Counts the loads, so only the answer to the one that started last is shown.
   const latestLoad = useRef(0);
 
   /** Asks for the list and shows the answer. */
   const load = useCallback(async () => {
     const thisLoad = ++latestLoad.current;
-    const state = await loadMyGroups();
-    if (!mounted.current || thisLoad !== latestLoad.current) {
-      return;
+    const state = await guard(loadMyGroups, isListSignedOut);
+    if (state && thisLoad === latestLoad.current) {
+      setGroups(state);
     }
-    // The API rejected the session: sign-in replaces this screen.
-    if (state.kind === "signed-out") {
-      await expire();
-      return;
-    }
-    setGroups(state);
-  }, [expire]);
+  }, [guard]);
 
   useEffect(() => {
-    mounted.current = true;
     load();
-    return () => {
-      mounted.current = false;
-    };
   }, [load]);
 
   async function retry() {
@@ -128,12 +111,11 @@ function Groups() {
     inFlight.current = true;
     setCreating(true);
     try {
-      const outcome = await createMyGroup(name);
+      const outcome = await guard(() => createMyGroup(name), isCreateSignedOut);
+      if (!outcome) {
+        return;
+      }
       if (!outcome.created) {
-        if ("signedOut" in outcome) {
-          await expireIfShown();
-          return;
-        }
         setError(outcome.error);
         return;
       }
