@@ -25,7 +25,8 @@ export async function createGroupAction(
   _previous: CreateGroupState,
   form: FormData,
 ): Promise<CreateGroupState> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) {
     redirect("/sign-in");
   }
@@ -34,6 +35,11 @@ export async function createGroupAction(
     name: typeof name === "string" ? name : "",
   });
   if (!outcome.created) {
+    if ("signedOut" in outcome) {
+      // The API rejected the session: remove the cookie and show sign-in, not a retry message.
+      cookieStore.delete(SESSION_COOKIE);
+      redirect("/sign-in");
+    }
     return { error: outcome.error };
   }
   refresh();

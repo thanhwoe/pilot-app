@@ -1,11 +1,12 @@
 import {
   type AccountState,
   completeSignIn,
+  expireSession,
   restoreSession,
   type SignInState,
   signOutSession,
 } from "@gop/shared";
-import { createContext, type ReactNode, use, useEffect, useState } from "react";
+import { createContext, type ReactNode, use, useCallback, useEffect, useState } from "react";
 import { authApi } from "./api";
 import { secureSessionStore as store } from "./session-store";
 
@@ -17,6 +18,8 @@ interface Session {
   signIn(values: { email: string; code: string }): Promise<SignInState | { signedIn: true }>;
   /** Ends the session on the API and deletes the token, even when the API or storage fails. */
   signOut(): Promise<void>;
+  /** The API rejected the session during use: deletes the token and shows sign-in. */
+  expire(): Promise<void>;
 }
 
 const SessionContext = createContext<Session | null>(null);
@@ -45,7 +48,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <SessionContext value={{ state, signIn, signOut }}>{children}</SessionContext>;
+  // Stable, so a screen can list it as an effect dependency without reloading on every render.
+  const expire = useCallback(async () => {
+    try {
+      await expireSession(store);
+    } finally {
+      setState({ kind: "clear" });
+    }
+  }, []);
+
+  return <SessionContext value={{ state, signIn, signOut, expire }}>{children}</SessionContext>;
 }
 
 export function useSession(): Session {

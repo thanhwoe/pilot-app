@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { signIn, uniqueEmail } from "./helpers";
+import { endSession, sessionCookie, signIn, uniqueEmail } from "./helpers";
 
 function groupsList(page: Page) {
   return page.getByRole("list", { name: "Nhóm của tôi" });
@@ -69,4 +69,21 @@ test("createGroupAction without a session sends me to sign-in", async ({ page },
   await createGroup(page, "Đà Lạt");
 
   await expect(page).toHaveURL("/sign-in");
+});
+
+test("[security] #19 AC 1: creating a group with a session the API ended sends me to sign-in", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  await signIn(page, email);
+  const cookie = await sessionCookie(page);
+  expect(cookie).toBeDefined();
+  await endSession(cookie?.value ?? "");
+
+  await createGroup(page, "Đà Lạt");
+
+  await expect(page).toHaveURL("/sign-in");
+  expect(await sessionCookie(page)).toBeUndefined();
+  await signIn(page, email);
+  await expect(page.getByText("Bạn chưa có nhóm nào.")).toBeVisible();
 });

@@ -37,6 +37,15 @@ export function apiPost(path: string, body: unknown): Promise<Response> {
   });
 }
 
+/** Ends a session on the API directly, as if it expired, while the browser keeps its cookie. */
+export async function endSession(token: string): Promise<void> {
+  const res = await fetch(`${API_URL}/auth/sign-out`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(res.ok, "the API didn't end the session").toBe(true);
+}
+
 /** Signs in through the page with a fresh code, and waits for the signed-in home. */
 export async function signIn(page: Page, email: string): Promise<void> {
   await goToCodeStep(page, email);

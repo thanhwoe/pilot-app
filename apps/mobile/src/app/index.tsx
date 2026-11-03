@@ -61,16 +61,40 @@ export default function Home() {
 
 /** My groups, newest first, and the form to create one. */
 function Groups() {
+  const { expire } = useSession();
   const [groups, setGroups] = useState<GroupsState | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   // `creating` disables the button only from the next render; this stops a second fast tap.
   const inFlight = useRef(false);
+  // A request still pending when this screen goes away (say, the user signed out) must not expire
+  // the session: by the time it answers, the stored token may belong to a new sign-in.
+  const mounted = useRef(true);
+
+  async function expireIfShown() {
+    if (mounted.current) {
+      await expire();
+    }
+  }
 
   useEffect(() => {
-    loadMyGroups().then(setGroups);
-  }, []);
+    mounted.current = true;
+    loadMyGroups().then((state) => {
+      if (!mounted.current) {
+        return;
+      }
+      // The API rejected the session: sign-in replaces this screen.
+      if (state.kind === "signed-out") {
+        expire();
+        return;
+      }
+      setGroups(state);
+    });
+    return () => {
+      mounted.current = false;
+    };
+  }, [expire]);
 
   async function create() {
     if (inFlight.current) {
@@ -81,6 +105,10 @@ function Groups() {
     try {
       const outcome = await createMyGroup(name);
       if (!outcome.created) {
+        if ("signedOut" in outcome) {
+          await expireIfShown();
+          return;
+        }
         setError(outcome.error);
         return;
       }
@@ -91,7 +119,12 @@ function Groups() {
         setGroups({ kind: "loaded", groups: [outcome.group, ...groups.groups] });
       } else {
         // The first load failed: ask again rather than show the new group as the only one.
-        setGroups(await loadMyGroups());
+        const state = await loadMyGroups();
+        if (state.kind === "signed-out") {
+          await expireIfShown();
+          return;
+        }
+        setGroups(state);
       }
     } finally {
       inFlight.current = false;

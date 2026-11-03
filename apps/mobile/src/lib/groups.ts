@@ -17,7 +17,10 @@ async function readToken(): Promise<string | null> {
   }
 }
 
-/** My groups, newest first, or the connection error. */
+/**
+ * My groups, newest first; `signed-out` when the API rejected the session, which the caller must
+ * answer by expiring the session; otherwise the connection error.
+ */
 export async function loadMyGroups(): Promise<GroupsState> {
   const token = await readToken();
   return token ? loadGroups(groupsApi, token) : { kind: "unavailable" };
