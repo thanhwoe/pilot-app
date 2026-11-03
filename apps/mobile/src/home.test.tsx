@@ -202,3 +202,20 @@ test("two presses on create before a re-render create one group", async () => {
     "Hoi An",
   ]);
 });
+
+// #21 AC 1: while the first load is pending, the list area says so.
+test("the list area shows the loading line while the first load is pending", async () => {
+  const held = deferred<Awaited<ReturnType<typeof groupsApi.listGroups>>>();
+  listGroups.mockReturnValue(held.promise);
+
+  await renderApp();
+  await screen.findByTestId("signed-in-email");
+
+  expect(screen.getByTestId("groups-loading").props.children).toBe("Đang tải nhóm…");
+  expect(screen.queryByTestId("groups-empty")).toBeNull();
+  expect(screen.queryByTestId("groups-error")).toBeNull();
+
+  held.resolve({ ok: true, data: { groups: [] } });
+  await screen.findByTestId("groups-empty");
+  expect(screen.queryByTestId("groups-loading")).toBeNull();
+});

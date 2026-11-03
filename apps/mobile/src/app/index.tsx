@@ -162,6 +162,7 @@ function Groups() {
       >
         <Text style={styles.buttonText}>{groupsCopy.create}</Text>
       </Pressable>
+      {groups === null && <Text testID="groups-loading">{groupsCopy.loading}</Text>}
       {groups?.kind === "unavailable" && (
         <Text testID="groups-error" style={styles.error}>
           {groupsCopy.unavailable}
