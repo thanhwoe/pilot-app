@@ -50,7 +50,8 @@ describe("createGroupAction", () => {
     async (_, result, error) => {
       createGroup.mockResolvedValue(result);
 
-      expect(await createGroupAction({}, form("Đà Lạt"))).toEqual({ error });
+      // A failed create keeps the typed name for a retry (#20).
+      expect(await createGroupAction({}, form("Đà Lạt"))).toEqual({ error, name: "Đà Lạt" });
 
       expect(cookieStore.delete).not.toHaveBeenCalled();
     },

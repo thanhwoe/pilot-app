@@ -16,6 +16,11 @@ appId: com.thanhwoe.gop
     text: 1 thành viên
 - assertNotVisible:
     id: groups-empty
+# #21 AC 6: a list that loaded fine has no retry button and no loading line.
+- assertNotVisible:
+    id: groups-retry
+- assertNotVisible:
+    id: groups-loading
 - assertNotVisible:
     id: group-name-input
     text: Da Lat

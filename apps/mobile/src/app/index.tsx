@@ -7,7 +7,7 @@ import {
   isCreateSignedOut,
   isListSignedOut,
 } from "@gop/shared";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
 import { createMyGroup, loadMyGroups } from "@/lib/groups";
@@ -72,13 +72,37 @@ function Groups() {
   // `creating` disables the button only from the next render; this stops a second fast tap.
   const inFlight = useRef(false);
 
-  useEffect(() => {
-    guard(loadMyGroups, isListSignedOut).then((state) => {
-      if (state) {
-        setGroups(state);
-      }
-    });
+  // `retrying` ignores a second press of "Thử lại" before the next render hides the button.
+  const retrying = useRef(false);
+  // Counts the loads, so only the answer to the one that started last is shown.
+  const latestLoad = useRef(0);
+
+  /** Asks for the list and shows the answer. */
+  const load = useCallback(async () => {
+    const thisLoad = ++latestLoad.current;
+    const state = await guard(loadMyGroups, isListSignedOut);
+    if (state && thisLoad === latestLoad.current) {
+      setGroups(state);
+    }
   }, [guard]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function retry() {
+    if (retrying.current) {
+      return;
+    }
+    retrying.current = true;
+    // Back to the loading line until the request answers.
+    setGroups(null);
+    try {
+      await load();
+    } finally {
+      retrying.current = false;
+    }
+  }
 
   async function create() {
     if (inFlight.current) {
@@ -102,10 +126,7 @@ function Groups() {
         setGroups({ kind: "loaded", groups: [outcome.group, ...groups.groups] });
       } else {
         // The first load failed: ask again rather than show the new group as the only one.
-        const state = await guard(loadMyGroups, isListSignedOut);
-        if (state) {
-          setGroups(state);
-        }
+        await load();
       }
     } finally {
       inFlight.current = false;
@@ -143,10 +164,16 @@ function Groups() {
       >
         <Text style={styles.buttonText}>{groupsCopy.create}</Text>
       </Pressable>
+      {groups === null && <Text testID="groups-loading">{groupsCopy.loading}</Text>}
       {groups?.kind === "unavailable" && (
-        <Text testID="groups-error" style={styles.error}>
-          {groupsCopy.unavailable}
-        </Text>
+        <>
+          <Text testID="groups-error" style={styles.error}>
+            {groupsCopy.unavailable}
+          </Text>
+          <Pressable testID="groups-retry" style={styles.button} onPress={retry}>
+            <Text style={styles.buttonText}>{groupsCopy.retry}</Text>
+          </Pressable>
+        </>
       )}
       {groups?.kind === "loaded" && groups.groups.length === 0 && (
         <Text testID="groups-empty">{groupsCopy.empty}</Text>

@@ -9,4 +9,6 @@ export const groupsCopy = {
   nameRequired: "Hãy nhập tên nhóm.",
   memberCount: (count: number) => `${count} thành viên`,
   unavailable: signInCopy.unavailable,
+  loading: "Đang tải nhóm…",
+  retry: "Thử lại",
 } as const;
