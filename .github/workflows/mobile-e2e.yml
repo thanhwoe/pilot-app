@@ -1,0 +1,35 @@
+name: Mobile E2E
+
+# Runs the Maestro flows on the Mac mini runner. A separate workflow from ci.yml because `paths:`
+# filters apply to a whole workflow: the check appears only on PRs that touch these paths.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - apps/mobile/**
+      - packages/shared/**
+      - apps/api/**
+
+# Never add `pull_request_target` or `workflow_run` here, and never reference a secret: this job
+# runs on a machine we own.
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-e2e:
+    # A fork's code must not run on the self-hosted runner.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64, macos-sim]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
