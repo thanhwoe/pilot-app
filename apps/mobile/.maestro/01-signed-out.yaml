@@ -6,4 +6,4 @@ appId: com.thanhwoe.gop
     id: email-input
 - assertVisible:
     id: send-code
-    text: Gửi mã
+    text: Gửi mã sai (broken on purpose)
