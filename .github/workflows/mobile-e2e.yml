@@ -38,6 +38,13 @@ jobs:
         run: echo "$HOME/.docker/bin" >> "$GITHUB_PATH"
       - name: Start Postgres
         run: pnpm db:up
+      # What is booted before the runs, so the cleanup shuts down only what the runs started.
+      - name: Note the start
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          touch "$RUNNER_TEMP/e2e-start"
+          xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}" >"$RUNNER_TEMP/sims-before" || true
+          adb devices | grep -w device | cut -f1 >"$RUNNER_TEMP/emus-before" || true
       # Both runs go through scripts/e2e-lock.sh, which waits for any other end-to-end run on the
       # machine and says so in the log. run.sh overwrites api.log, so each run's copy is kept. The
       # exit code is kept too: the Android run still happens after an iOS failure, and the job
@@ -57,3 +64,33 @@ jobs:
           mkdir -p "$RUNNER_TEMP/e2e-out"
           cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true
           exit "$status"
+      # run.sh passes Maestro no output directory, so its output is in ~/.maestro/tests, one folder
+      # per run. Keep the ones this job made.
+      - name: Collect Maestro output
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-out/maestro"
+          find "$HOME/.maestro/tests" -mindepth 1 -maxdepth 1 -newer "$RUNNER_TEMP/e2e-start" \
+            -exec cp -R {} "$RUNNER_TEMP/e2e-out/maestro/" \; || true
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() || cancelled() }}
+        with:
+          name: mobile-e2e-output
+          path: ${{ runner.temp }}/e2e-out/
+          if-no-files-found: warn
+          retention-days: 7
+      # Leave the machine free for the next session. It takes the e2e lock first, so it never shuts
+      # down a device another end-to-end run is using; if the lock stays held it shuts nothing down.
+      - name: Shut down the simulator and emulator this job started
+        if: always()
+        run: |
+          cat >"$RUNNER_TEMP/cleanup.sh" <<'SCRIPT'
+          for id in $(xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}"); do
+            grep -qx "$id" "$RUNNER_TEMP/sims-before" || xcrun simctl shutdown "$id"
+          done
+          for serial in $(adb devices | grep -w device | cut -f1); do
+            grep -qx "$serial" "$RUNNER_TEMP/emus-before" || adb -s "$serial" emu kill
+          done
+          SCRIPT
+          E2E_LOCK_WAIT=120 scripts/e2e-lock.sh bash "$RUNNER_TEMP/cleanup.sh" ||
+            echo "::warning::Could not shut down the simulator and emulator; the e2e lock was held or a command failed."
