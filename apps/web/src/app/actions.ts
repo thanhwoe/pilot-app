@@ -18,8 +18,12 @@ export async function signOutAction(): Promise<void> {
 }
 
 export interface CreateGroupState {
+  /** The create failed: what the form shows. */
   error?: string;
-  /** The name submitted when the create failed. The form keeps its own copy of the field (#51). */
+  /**
+   * The create succeeded: the name as submitted, so the form clears the field only if it still
+   * holds it. The form keeps its own copy of the field (#51).
+   */
   name?: string;
 }
 
@@ -40,8 +44,8 @@ export async function createGroupAction(
     if (isCreateSignedOut(outcome)) {
       return endRejectedSessionInAction();
     }
-    return { error: outcome.error, name };
+    return { error: outcome.error };
   }
   refresh();
-  return {};
+  return { name };
 }
