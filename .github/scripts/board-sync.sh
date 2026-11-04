@@ -11,6 +11,22 @@
 # (open|closed), ISSUE_LABELS_JSON (a JSON array of label names), PROJECT_NUMBER.
 set -euo pipefail
 
+# GraphQL calls to the board fail now and then with "Something went wrong while executing your
+# query", mostly when several issues change labels at once. Retry each call a few times.
+graphql() {
+  local attempt
+  for attempt in 1 2 3 4; do
+    if gh api graphql "$@"; then
+      return 0
+    fi
+    if [ "$attempt" -lt 4 ]; then
+      echo "::warning::GraphQL call failed (attempt $attempt of 4), retrying in $((attempt * 5))s." >&2
+      sleep $((attempt * 5))
+    fi
+  done
+  return 1
+}
+
 status=inbox
 if [ "$ISSUE_STATE" = closed ]; then
   status=done
@@ -24,7 +40,7 @@ else
   done
 fi
 
-project=$(gh api graphql -F number="$PROJECT_NUMBER" -f query='
+project=$(graphql -F number="$PROJECT_NUMBER" -f query='
   query($number: Int!) {
     viewer {
       projectV2(number: $number) {
@@ -44,12 +60,12 @@ if [ -z "$option_id" ]; then
 fi
 
 # Adding an issue that is already on the board returns its existing item.
-item_id=$(gh api graphql -f project="$project_id" -f content="$ISSUE_NODE_ID" -f query='
+item_id=$(graphql -f project="$project_id" -f content="$ISSUE_NODE_ID" -f query='
   mutation($project: ID!, $content: ID!) {
     addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } }
   }' --jq .data.addProjectV2ItemById.item.id)
 
-gh api graphql -f project="$project_id" -f item="$item_id" -f field="$field_id" -f option="$option_id" -f query='
+graphql -f project="$project_id" -f item="$item_id" -f field="$field_id" -f option="$option_id" -f query='
   mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
     updateProjectV2ItemFieldValue(input: {
       projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option }
