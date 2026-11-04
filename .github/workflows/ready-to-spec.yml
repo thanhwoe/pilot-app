@@ -1,0 +1,42 @@
+name: Ready to spec
+
+# When the repository owner adds `ready` to an issue, start the cloud scheduled task that runs
+# intake and spec (thanhwoe/solo-factory docs/routines/intake-spec.md). It filters here, so other
+# label changes start no session.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ready-to-spec-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  fire:
+    if: ${{ github.event.label.name == 'ready' && github.event.sender.login == github.repository_owner && !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fire the routine
+        env:
+          FIRE_URL: ${{ secrets.INTAKE_SPEC_FIRE_URL }}
+          FIRE_TOKEN: ${{ secrets.INTAKE_SPEC_FIRE_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          # The /fire endpoint is in research preview; a breaking change ships under a new header.
+          ROUTINE_BETA: experimental-cc-routine-2026-04-01
+        run: |
+          if [ -z "$FIRE_URL" ] || [ -z "$FIRE_TOKEN" ]; then
+            echo "::warning::INTAKE_SPEC_FIRE_URL or INTAKE_SPEC_FIRE_TOKEN is not set, so no session started."
+            exit 0
+          fi
+          response=$(curl -sS --fail-with-body -X POST "$FIRE_URL" \
+            -H "Authorization: Bearer $FIRE_TOKEN" \
+            -H "anthropic-beta: $ROUTINE_BETA" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"$ISSUE_NUMBER\"}")
+          echo "Session for #$ISSUE_NUMBER: $(jq -r .claude_code_session_url <<<"$response")"
