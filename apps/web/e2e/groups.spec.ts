@@ -91,6 +91,52 @@ test("#20 AC 3: a valid name after a failed create creates the group and clears 
   await expect(page.locator("main").getByRole("alert")).toBeHidden();
 });
 
+test("#51 AC 1: text typed while a failed create is pending is not overwritten when it ends", async ({
+  page,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  // Hold only the first Server Action the form sends, so the test can type while it is pending.
+  // That is what a slow CI run does to #20 AC 3: the next name is typed before the first create
+  // has ended, and the form reset after the action must not put the old name back over it.
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let markHeld!: () => void;
+  const held = new Promise<void>((resolve) => {
+    markHeld = resolve;
+  });
+  let actions = 0;
+  await page.route(
+    (url) => url.pathname === "/",
+    async (route) => {
+      const request = route.request();
+      const isAction = request.method() === "POST" && "next-action" in request.headers();
+      if (isAction && ++actions === 1) {
+        markHeld();
+        await released;
+      }
+      await route.continue();
+    },
+  );
+
+  await createGroup(page, "   ");
+  // Without a held request this test would pass for no reason: it times out here instead.
+  await held;
+  await page.getByLabel("Tên nhóm").fill("Đà Lạt");
+  release();
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText("Hãy nhập tên nhóm.");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("Đà Lạt");
+  await page.getByRole("button", { name: "Tạo nhóm" }).click();
+  const items = groupsList(page).getByRole("listitem");
+  await expect(items).toHaveCount(1);
+  await expect(items.first()).toContainText("Đà Lạt");
+  await expect(items.first()).toContainText("1 thành viên");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
+  await expect(page.locator("main").getByRole("alert")).toBeHidden();
+});
+
 test("createGroupAction without a session sends me to sign-in", async ({ page }, testInfo) => {
   await signIn(page, uniqueEmail(testInfo));
   await page.context().clearCookies();
