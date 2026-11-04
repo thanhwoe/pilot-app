@@ -48,19 +48,31 @@ jobs:
       # Both runs go through scripts/e2e-lock.sh, which waits for any other end-to-end run on the
       # machine and says so in the log. run.sh overwrites api.log, so each run's copy is kept. The
       # exit code is kept too: the Android run still happens after an iOS failure, and the job
-      # fails if either failed.
+      # fails if either failed. When the run is cancelled the runner stops only this shell, so the
+      # trap signals the whole process group: otherwise run.sh keeps the lock and the simulator, and
+      # the cleanup below waits for a lock that is never released.
       - name: Maestro flows on iOS
         run: |
+          set -m
+          pnpm --filter @gop/mobile e2e:ios &
+          pid=$!
+          trap 'kill -TERM -- -"$pid"; wait "$pid"; exit 143' INT TERM
           status=0
-          pnpm --filter @gop/mobile e2e:ios || status=$?
+          wait "$pid" || status=$?
+          trap - INT TERM
           mkdir -p "$RUNNER_TEMP/e2e-out"
           cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-ios.log" || true
           exit "$status"
       - name: Maestro flows on Android
         if: ${{ !cancelled() }}
         run: |
+          set -m
+          pnpm --filter @gop/mobile e2e:android &
+          pid=$!
+          trap 'kill -TERM -- -"$pid"; wait "$pid"; exit 143' INT TERM
           status=0
-          pnpm --filter @gop/mobile e2e:android || status=$?
+          wait "$pid" || status=$?
+          trap - INT TERM
           mkdir -p "$RUNNER_TEMP/e2e-out"
           cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true
           exit "$status"
