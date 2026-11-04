@@ -4,6 +4,8 @@
 //
 //   node report-path.mjs pr       → <tmp>/factory-kit/<repo>/<branch>.md          (describe-pr, create-pr)
 //   node report-path.mjs verify   → <tmp>/factory-kit/<repo>/<branch>-verify.md   (verify, describe-pr)
+//   node report-path.mjs triage   → <tmp>/factory-kit/<repo>/<branch>-triage.md   (triage)
+//   node report-path.mjs report   → <tmp>/factory-kit/<repo>/<branch>-report.md   (report)
 //
 // It creates the directory, not the file. Run it from inside the repository.
 
@@ -13,7 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SUFFIX = { pr: '', verify: '-verify' };
+const SUFFIX = { pr: '', verify: '-verify', triage: '-triage', report: '-report' };
 
 /** `<tmp>/factory-kit/<repo>/<branch><suffix>.md`, with `/` in the branch name turned into `-`. */
 export const reportPath = (kind, { repoRoot, branch, tmp = tmpdir() }) =>
@@ -22,7 +24,7 @@ export const reportPath = (kind, { repoRoot, branch, tmp = tmpdir() }) =>
 const main = () => {
   const kind = process.argv[2];
   if (!(kind in SUFFIX)) {
-    process.stderr.write('usage: report-path.mjs pr|verify\n');
+    process.stderr.write('usage: report-path.mjs pr|verify|triage|report\n');
     process.exitCode = 2;
     return;
   }
