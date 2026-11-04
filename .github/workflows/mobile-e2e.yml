@@ -44,7 +44,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/e2e-out"
           touch "$RUNNER_TEMP/e2e-start"
           xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}" >"$RUNNER_TEMP/sims-before" || true
-          adb devices | grep -w device | cut -f1 >"$RUNNER_TEMP/emus-before" || true
+          adb devices | grep "^emulator-" | grep -w device | cut -f1 >"$RUNNER_TEMP/emus-before" || true
       # Both runs go through scripts/e2e-lock.sh, which waits for any other end-to-end run on the
       # machine and says so in the log. run.sh overwrites api.log, so each run's copy is kept. The
       # exit code is kept too: the Android run still happens after an iOS failure, and the job
@@ -53,6 +53,7 @@ jobs:
       # the cleanup below waits for a lock that is never released.
       - name: Maestro flows on iOS
         run: |
+          rm -f apps/mobile/e2e/api.log
           set -m
           pnpm --filter @gop/mobile e2e:ios &
           pid=$!
@@ -66,6 +67,7 @@ jobs:
       - name: Maestro flows on Android
         if: ${{ !cancelled() }}
         run: |
+          rm -f apps/mobile/e2e/api.log
           set -m
           pnpm --filter @gop/mobile e2e:android &
           pid=$!
@@ -97,10 +99,14 @@ jobs:
         if: always()
         run: |
           cat >"$RUNNER_TEMP/cleanup.sh" <<'SCRIPT'
+          if [ ! -f "$RUNNER_TEMP/sims-before" ] || [ ! -f "$RUNNER_TEMP/emus-before" ]; then
+            echo "The job stopped before it noted what was booted; shutting nothing down."
+            exit 0
+          fi
           for id in $(xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}"); do
             grep -qx "$id" "$RUNNER_TEMP/sims-before" || xcrun simctl shutdown "$id"
           done
-          for serial in $(adb devices | grep -w device | cut -f1); do
+          for serial in $(adb devices | grep "^emulator-" | grep -w device | cut -f1); do
             grep -qx "$serial" "$RUNNER_TEMP/emus-before" || adb -s "$serial" emu kill
           done
           SCRIPT
