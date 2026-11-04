@@ -25,6 +25,8 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64, macos-sim]
     timeout-minutes: 60
+    env:
+      E2E_LOCK_WAIT: 15
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
