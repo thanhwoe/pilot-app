@@ -28,6 +28,7 @@ Reviewers, human or Claude, check each item and cite file and line for every pro
 - [ ] Mobile UI has `testID`s on the elements the Maestro flow uses.
 - [ ] A test that proves a criterion of another issue's spec names that issue in its title (`#19 AC 1`), so "AC 3" is never ambiguous.
 - [ ] A test that asserts something stayed the same first waits for the event that would have changed it (a frame, a response, a rendered row), so it can't pass before the change had its chance.
+- [ ] A field in a `useActionState` form is controlled, and a test holds the action open (`holdFirstServerAction`) and types before it ends.
 - [ ] Docs and `CLAUDE.md` are updated when behaviour or commands changed.
 
 ## Evidence
