@@ -19,7 +19,7 @@ export async function signOutAction(): Promise<void> {
 
 export interface CreateGroupState {
   error?: string;
-  /** The name that was submitted when the create failed, so the field keeps it for a retry. */
+  /** The name submitted when the create failed. The form keeps its own copy of the field (#51). */
   name?: string;
 }
 
