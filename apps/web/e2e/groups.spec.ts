@@ -181,6 +181,10 @@ test("#54 AC 3, 4: text typed while a create is pending is kept when it succeeds
   const items = groupsList(page).getByRole("listitem");
   await expect(items).toHaveCount(1);
   await expect(items.first()).toContainText("Đà Lạt");
+  // The list and the success state arrive together, and the form's effect runs just after the
+  // commit. Wait for a frame, so "Nhà" is checked after the form has handled the success rather
+  // than before it.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
   await expect(page.getByLabel("Tên nhóm")).toHaveValue("Nhà");
   // The second create is not held, and nothing is typed while it runs: the field is cleared.
   await page.getByRole("button", { name: "Tạo nhóm" }).click();
