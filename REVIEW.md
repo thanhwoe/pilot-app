@@ -27,6 +27,7 @@ Reviewers, human or Claude, check each item and cite file and line for every pro
 - [ ] No dead code, commented-out code or leftover `console.log`.
 - [ ] Mobile UI has `testID`s on the elements the Maestro flow uses.
 - [ ] A test that proves a criterion of another issue's spec names that issue in its title (`#19 AC 1`), so "AC 3" is never ambiguous.
+- [ ] A field in a `useActionState` form is controlled, and a test holds the action open (`holdFirstServerAction`) and types before it ends.
 - [ ] Docs and `CLAUDE.md` are updated when behaviour or commands changed.
 
 ## Evidence
