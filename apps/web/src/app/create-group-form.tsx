@@ -12,10 +12,12 @@ export function CreateGroupForm() {
   // would put the old value back over a name typed while the create was still pending (#51).
   const [name, setName] = useState("");
 
-  // A create that succeeds clears the field; one that fails leaves what is typed, for a retry.
+  // A create that succeeds clears the field, unless the member has typed something else while it
+  // was pending (#54). One that fails leaves what is typed, for a retry.
   useEffect(() => {
-    if (state !== initialState && state.error === undefined) {
-      setName("");
+    const submitted = state.name;
+    if (submitted !== undefined) {
+      setName((typed) => (typed === submitted ? "" : typed));
     }
   }, [state]);
 
