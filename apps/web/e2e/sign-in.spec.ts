@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { apiPost, devCode, goToCodeStep, hasDevCode, sessionCookie, uniqueEmail } from "./helpers";
+import {
+  apiPost,
+  devCode,
+  goToCodeStep,
+  hasDevCode,
+  holdFirstServerAction,
+  sessionCookie,
+  uniqueEmail,
+} from "./helpers";
 
 test("AC 1: signed out, the home page sends me to sign-in, which asks for my email", async ({
   page,
@@ -36,6 +44,26 @@ test("AC 6: an invalid email shows an error and requests no code", async ({ page
   await expect(page.getByRole("button", { name: "Gửi mã" })).toBeVisible();
   await expect(page.getByLabel("Mã")).toHaveCount(0);
   expect(await hasDevCode("not-an-email")).toBe(false);
+});
+
+test("#55 AC 1: an email edited while a failing send-code request is pending is not overwritten", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  await page.goto("/sign-in");
+  const { held, release } = await holdFirstServerAction(page, "/sign-in");
+
+  // An invalid email fails inside the action, without the API, so the failure is easy to force.
+  await page.getByLabel("Email").fill("not-an-email");
+  await page.getByRole("button", { name: "Gửi mã" }).click();
+  await held;
+  await page.getByLabel("Email").fill(email);
+  release();
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText("Email không hợp lệ.");
+  await expect(page.getByLabel("Email")).toHaveValue(email);
+  await page.getByRole("button", { name: "Gửi mã" }).click();
+  await expect(page.getByText(`Nhập mã 6 số đã gửi tới ${email}`)).toBeVisible();
 });
 
 test("AC 7: a 6th code request in 15 minutes shows the too-many-requests error", async ({
@@ -88,11 +116,13 @@ test("AC 4: a wrong code keeps me signed out on the code step with an error", as
 });
 
 test("AC 5: 'use another email' goes back to the email step", async ({ page }, testInfo) => {
-  await goToCodeStep(page, uniqueEmail(testInfo));
+  const email = uniqueEmail(testInfo);
+  await goToCodeStep(page, email);
 
   await page.getByRole("button", { name: "Dùng email khác" }).click();
 
   await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Email")).toHaveValue(email);
   await expect(page.getByRole("button", { name: "Gửi mã" })).toBeVisible();
   await expect(page.getByLabel("Mã")).toHaveCount(0);
 });

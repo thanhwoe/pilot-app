@@ -66,3 +66,33 @@ export async function goToCodeStep(page: Page, email: string): Promise<void> {
 export async function sessionCookie(page: Page) {
   return (await page.context().cookies()).find((cookie) => cookie.name === SESSION_COOKIE);
 }
+
+/**
+ * Holds the first Server Action POST sent to `path`, so a test can act while it is pending. It is
+ * what a slow run does to a form. `held` resolves once that request is held, so a test that awaits
+ * it times out instead of passing for no reason; `release()` lets the request through.
+ */
+export async function holdFirstServerAction(page: Page, path: string) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let markHeld!: () => void;
+  const held = new Promise<void>((resolve) => {
+    markHeld = resolve;
+  });
+  let actions = 0;
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      const request = route.request();
+      const isAction = request.method() === "POST" && "next-action" in request.headers();
+      if (isAction && ++actions === 1) {
+        markHeld();
+        await released;
+      }
+      await route.continue();
+    },
+  );
+  return { held, release };
+}
