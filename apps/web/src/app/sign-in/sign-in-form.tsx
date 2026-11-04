@@ -1,10 +1,36 @@
 "use client";
 
 import { signInCopy as copy, type SignInState } from "@gop/shared";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { signInAction } from "./actions";
 
 const initialState: SignInState = { step: "email" };
+
+/**
+ * The email step's field. It is controlled, because React resets an uncontrolled field when an
+ * action ends, and that reset would put the old email back over one corrected while the request
+ * was pending (#55). It starts from the email the step is given, so coming back from the code step
+ * still fills it in, and a failed request leaves exactly what was typed.
+ */
+function EmailField({ initial }: { initial: string | undefined }) {
+  const [email, setEmail] = useState(initial ?? "");
+
+  return (
+    <>
+      <label htmlFor="email">Email</label>
+      <input
+        id="email"
+        name="email"
+        type="text"
+        inputMode="email"
+        autoComplete="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        required
+      />
+    </>
+  );
+}
 
 export function SignInForm() {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
@@ -13,18 +39,7 @@ export function SignInForm() {
     <form className="sign-in" action={formAction}>
       <input type="hidden" name="step" value={state.step} />
       {state.step === "email" ? (
-        <>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            name="email"
-            type="text"
-            inputMode="email"
-            autoComplete="email"
-            defaultValue={state.email}
-            required
-          />
-        </>
+        <EmailField initial={state.email} />
       ) : (
         <>
           <input type="hidden" name="email" value={state.email} />
