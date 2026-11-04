@@ -33,3 +33,27 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # A launchd-started runner has a short PATH, without Docker's CLI.
+      - name: Put Docker on PATH
+        run: echo "$HOME/.docker/bin" >> "$GITHUB_PATH"
+      - name: Start Postgres
+        run: pnpm db:up
+      # Both runs go through scripts/e2e-lock.sh, which waits for any other end-to-end run on the
+      # machine and says so in the log. run.sh overwrites api.log, so each run's copy is kept. The
+      # exit code is kept too: the Android run still happens after an iOS failure, and the job
+      # fails if either failed.
+      - name: Maestro flows on iOS
+        run: |
+          status=0
+          pnpm --filter @gop/mobile e2e:ios || status=$?
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-ios.log" || true
+          exit "$status"
+      - name: Maestro flows on Android
+        if: ${{ !cancelled() }}
+        run: |
+          status=0
+          pnpm --filter @gop/mobile e2e:android || status=$?
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true
+          exit "$status"
