@@ -60,29 +60,31 @@ jobs:
       - name: Maestro flows on iOS
         run: |
           rm -f apps/mobile/e2e/api.log
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          save_log() { cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-ios.log" || true; }
           set -m
           pnpm --filter @gop/mobile e2e:ios &
           pid=$!
-          trap 'kill -TERM -- -"$pid"; wait "$pid"; exit 143' INT TERM
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid"; save_log; exit 143' INT TERM
           status=0
           wait "$pid" || status=$?
           trap - INT TERM
-          mkdir -p "$RUNNER_TEMP/e2e-out"
-          cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-ios.log" || true
+          save_log
           exit "$status"
       - name: Maestro flows on Android
         if: ${{ !cancelled() }}
         run: |
           rm -f apps/mobile/e2e/api.log
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          save_log() { cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true; }
           set -m
           pnpm --filter @gop/mobile e2e:android &
           pid=$!
-          trap 'kill -TERM -- -"$pid"; wait "$pid"; exit 143' INT TERM
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid"; save_log; exit 143' INT TERM
           status=0
           wait "$pid" || status=$?
           trap - INT TERM
-          mkdir -p "$RUNNER_TEMP/e2e-out"
-          cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true
+          save_log
           exit "$status"
       # run.sh passes Maestro no output directory, so its output is in ~/.maestro/tests, one folder
       # per run. Keep the ones this job made.
