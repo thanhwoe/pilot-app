@@ -1,37 +1,26 @@
 "use client";
 
 import { groupsCopy as copy, GROUP_NAME_MAX_LENGTH } from "@gop/shared";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState } from "react";
+import { ActionTextField } from "./action-text-field";
 import { type CreateGroupState, createGroupAction } from "./actions";
 
 const initialState: CreateGroupState = {};
 
 export function CreateGroupForm() {
   const [state, formAction, pending] = useActionState(createGroupAction, initialState);
-  // Controlled, because React resets an uncontrolled field when an action ends, and that reset
-  // would put the old value back over a name typed while the create was still pending (#51).
-  const [name, setName] = useState("");
-
-  // A create that succeeds clears the field, unless the member has typed something else while it
-  // was pending (#54). One that fails leaves what is typed, for a retry.
-  useEffect(() => {
-    const submitted = state.name;
-    if (submitted !== undefined) {
-      setName((typed) => (typed === submitted ? "" : typed));
-    }
-  }, [state]);
 
   return (
     <form className="create-group" action={formAction}>
       <label htmlFor="group-name">{copy.nameLabel}</label>
       {/* Not `required`: an empty name must reach the action, which shows the error. */}
-      <input
+      <ActionTextField
         id="group-name"
         name="name"
         type="text"
         maxLength={GROUP_NAME_MAX_LENGTH}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
+        result={state}
+        submitted={state.name}
       />
       {state.error && (
         <p className="form-error" role="alert">

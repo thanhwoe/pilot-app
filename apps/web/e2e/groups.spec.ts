@@ -91,6 +91,23 @@ test("#20 AC 3: a valid name after a failed create creates the group and clears 
   await expect(page.locator("main").getByRole("alert")).toBeHidden();
 });
 
+test("#72 AC 5: two creates with the same name each clear the field", async ({
+  page,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  const items = groupsList(page).getByRole("listitem");
+
+  await createGroup(page, "Đà Lạt");
+  await expect(items).toHaveCount(1);
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
+
+  // The API allows two groups with one name. The second result carries the same name as the
+  // first, so a field that cleared only when the name changed would keep it.
+  await createGroup(page, "Đà Lạt");
+  await expect(items).toHaveCount(2);
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
+});
+
 test("#51 AC 1: text typed while a failed create is pending is not overwritten when it ends", async ({
   page,
 }, testInfo) => {
