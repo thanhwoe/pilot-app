@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# throwaway: evidence for #74 AC 1
 # Runs a command while holding the machine-wide end-to-end lock.
 #
 #   scripts/e2e-lock.sh <command> [args...]
