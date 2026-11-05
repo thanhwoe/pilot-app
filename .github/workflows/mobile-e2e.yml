@@ -9,6 +9,12 @@ on:
       - apps/mobile/**
       - packages/shared/**
       - apps/api/**
+      # What the job depends on besides app code: itself, the lock it takes, the lockfile it
+      # installs from and the Postgres it starts.
+      - .github/workflows/mobile-e2e.yml
+      - scripts/e2e-lock.sh
+      - pnpm-lock.yaml
+      - docker-compose.yml
 
 # Never add `pull_request_target` or `workflow_run` here, and never reference a secret: this job
 # runs on a machine we own.
@@ -54,29 +60,31 @@ jobs:
       - name: Maestro flows on iOS
         run: |
           rm -f apps/mobile/e2e/api.log
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          save_log() { cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-ios.log" || true; }
           set -m
           pnpm --filter @gop/mobile e2e:ios &
           pid=$!
-          trap 'kill -TERM -- -"$pid"; wait "$pid"; exit 143' INT TERM
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid" || true; save_log; exit 143' INT TERM
           status=0
           wait "$pid" || status=$?
           trap - INT TERM
-          mkdir -p "$RUNNER_TEMP/e2e-out"
-          cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-ios.log" || true
+          save_log
           exit "$status"
       - name: Maestro flows on Android
         if: ${{ !cancelled() }}
         run: |
           rm -f apps/mobile/e2e/api.log
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          save_log() { cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true; }
           set -m
           pnpm --filter @gop/mobile e2e:android &
           pid=$!
-          trap 'kill -TERM -- -"$pid"; wait "$pid"; exit 143' INT TERM
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid" || true; save_log; exit 143' INT TERM
           status=0
           wait "$pid" || status=$?
           trap - INT TERM
-          mkdir -p "$RUNNER_TEMP/e2e-out"
-          cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true
+          save_log
           exit "$status"
       # run.sh passes Maestro no output directory, so its output is in ~/.maestro/tests, one folder
       # per run. Keep the ones this job made.
@@ -94,11 +102,25 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       # Leave the machine free for the next session. It takes the e2e lock first, so it never shuts
-      # down a device another end-to-end run is using; if the lock stays held it shuts nothing down.
+      # down a device or a port 3101 listener another end-to-end run is using; if the lock stays held
+      # it stops nothing.
       - name: Shut down the simulator and emulator this job started
         if: always()
         run: |
           cat >"$RUNNER_TEMP/cleanup.sh" <<'SCRIPT'
+          # A run the runner killed hard can leave its API on 3101, and the next run refuses to start
+          # while anything listens there. Only 3101: the dev API on 3001 is not ours to stop.
+          for pid in $(lsof -nP -iTCP:3101 -sTCP:LISTEN -t); do
+            echo "Port 3101 is held by pid $pid: $(ps -o command= -p "$pid"); stopping it"
+            kill -TERM "$pid" || true
+          done
+          for _ in $(seq 20); do
+            [ -z "$(lsof -nP -iTCP:3101 -sTCP:LISTEN -t)" ] && break
+            sleep 0.5
+          done
+          for pid in $(lsof -nP -iTCP:3101 -sTCP:LISTEN -t); do
+            kill -KILL "$pid" || true
+          done
           if [ ! -f "$RUNNER_TEMP/sims-before" ] || [ ! -f "$RUNNER_TEMP/emus-before" ]; then
             echo "The job stopped before it noted what was booted; shutting nothing down."
             exit 0
