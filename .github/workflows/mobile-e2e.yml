@@ -65,7 +65,7 @@ jobs:
           set -m
           pnpm --filter @gop/mobile e2e:ios &
           pid=$!
-          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid"; save_log; exit 143' INT TERM
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid" || true; save_log; exit 143' INT TERM
           status=0
           wait "$pid" || status=$?
           trap - INT TERM
@@ -80,7 +80,7 @@ jobs:
           set -m
           pnpm --filter @gop/mobile e2e:android &
           pid=$!
-          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid"; save_log; exit 143' INT TERM
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid" || true; save_log; exit 143' INT TERM
           status=0
           wait "$pid" || status=$?
           trap - INT TERM
