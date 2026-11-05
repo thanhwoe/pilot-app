@@ -9,6 +9,12 @@ on:
       - apps/mobile/**
       - packages/shared/**
       - apps/api/**
+      # What the job depends on besides app code: itself, the lock it takes, the lockfile it
+      # installs from and the Postgres it starts.
+      - .github/workflows/mobile-e2e.yml
+      - scripts/e2e-lock.sh
+      - pnpm-lock.yaml
+      - docker-compose.yml
 
 # Never add `pull_request_target` or `workflow_run` here, and never reference a secret: this job
 # runs on a machine we own.
