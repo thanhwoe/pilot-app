@@ -36,3 +36,15 @@ jobs:
             exit 1
           fi
           echo "No unchecked boxes."
+
+      # From the retro of #74, whose PR merged with "Not run yet" in every row of its runner
+      # evidence table: evidence still to come, written so that the two checks above pass.
+      - name: No evidence still to come
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if grep -inE '(^|[|])[[:space:]]*([-*][[:space:]]+)?(\*\*)?not run yet' <<<"$BODY"; then
+            echo "::error::The PR description says some evidence is not run yet (above). Collect it and update the description, or keep the PR in draft until then. If it can't be collected, write 'Not run: <what>, because <why>'."
+            exit 1
+          fi
+          echo "No evidence still to come."
