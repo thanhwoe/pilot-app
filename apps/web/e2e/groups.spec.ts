@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { endSession, sessionCookie, signIn, uniqueEmail } from "./helpers";
+import { endSession, holdFirstServerAction, sessionCookie, signIn, uniqueEmail } from "./helpers";
 
 function groupsList(page: Page) {
   return page.getByRole("list", { name: "Nhóm của tôi" });
@@ -98,27 +98,7 @@ test("#51 AC 1: text typed while a failed create is pending is not overwritten w
   // Hold only the first Server Action the form sends, so the test can type while it is pending.
   // That is what a slow CI run does to #20 AC 3: the next name is typed before the first create
   // has ended, and the form reset after the action must not put the old name back over it.
-  let release!: () => void;
-  const released = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let markHeld!: () => void;
-  const held = new Promise<void>((resolve) => {
-    markHeld = resolve;
-  });
-  let actions = 0;
-  await page.route(
-    (url) => url.pathname === "/",
-    async (route) => {
-      const request = route.request();
-      const isAction = request.method() === "POST" && "next-action" in request.headers();
-      if (isAction && ++actions === 1) {
-        markHeld();
-        await released;
-      }
-      await route.continue();
-    },
-  );
+  const { held, release } = await holdFirstServerAction(page, "/");
 
   await createGroup(page, "   ");
   // Without a held request this test would pass for no reason: it times out here instead.
@@ -137,40 +117,11 @@ test("#51 AC 1: text typed while a failed create is pending is not overwritten w
   await expect(page.locator("main").getByRole("alert")).toBeHidden();
 });
 
-/**
- * Holds the first Server Action the form sends until `release()`, so a test can type while a
- * create is pending. `held` resolves once the action has reached the server route.
- */
-async function holdFirstAction(page: Page) {
-  let release!: () => void;
-  const released = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let markHeld!: () => void;
-  const held = new Promise<void>((resolve) => {
-    markHeld = resolve;
-  });
-  let actions = 0;
-  await page.route(
-    (url) => url.pathname === "/",
-    async (route) => {
-      const request = route.request();
-      const isAction = request.method() === "POST" && "next-action" in request.headers();
-      if (isAction && ++actions === 1) {
-        markHeld();
-        await released;
-      }
-      await route.continue();
-    },
-  );
-  return { held, release };
-}
-
 test("#54 AC 3, 4: text typed while a create is pending is kept when it succeeds, and a name left alone is cleared", async ({
   page,
 }, testInfo) => {
   await signIn(page, uniqueEmail(testInfo));
-  const { held, release } = await holdFirstAction(page);
+  const { held, release } = await holdFirstServerAction(page, "/");
 
   await createGroup(page, "Đà Lạt");
   // Without a held request this test would pass for no reason: it times out here instead.
