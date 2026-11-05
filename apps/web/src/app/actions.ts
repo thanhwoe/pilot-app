@@ -22,7 +22,7 @@ export interface CreateGroupState {
   error?: string;
   /**
    * The create succeeded: the name as submitted, so the form clears the field only if it still
-   * holds it. The form keeps its own copy of the field (#51).
+   * holds it. `ActionTextField` keeps its own copy of the field (#51).
    */
   name?: string;
 }
