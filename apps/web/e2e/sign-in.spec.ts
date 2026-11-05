@@ -115,6 +115,47 @@ test("AC 4: a wrong code keeps me signed out on the code step with an error", as
   expect(await sessionCookie(page)).toBeUndefined();
 });
 
+test("#59 AC 1: a code typed while a failing sign-in request is pending is not overwritten", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  await goToCodeStep(page, email);
+  const code = await devCode(email);
+  const wrong = code === "000000" ? "111111" : "000000";
+  // Registered on the code step, so the first held request is the code submit, not the email one.
+  const { held, release } = await holdFirstServerAction(page, "/sign-in");
+
+  await page.getByLabel("Mã").fill(wrong);
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+  await held;
+  await page.getByLabel("Mã").fill(code);
+  release();
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText(
+    "Mã không đúng hoặc đã hết hạn. Hãy thử lại hoặc yêu cầu mã mới.",
+  );
+  await expect(page.getByLabel("Mã")).toHaveValue(code);
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+  await expect(page).toHaveURL("/");
+});
+
+test("#59 AC 3: after a wrong code the field still holds it and the error shows", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  await goToCodeStep(page, email);
+  const code = await devCode(email);
+  const wrong = code === "000000" ? "111111" : "000000";
+
+  await page.getByLabel("Mã").fill(wrong);
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText(
+    "Mã không đúng hoặc đã hết hạn. Hãy thử lại hoặc yêu cầu mã mới.",
+  );
+  await expect(page.getByLabel("Mã")).toHaveValue(wrong);
+});
+
 test("AC 5: 'use another email' goes back to the email step", async ({ page }, testInfo) => {
   const email = uniqueEmail(testInfo);
   await goToCodeStep(page, email);
