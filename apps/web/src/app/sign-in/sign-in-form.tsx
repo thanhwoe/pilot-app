@@ -32,6 +32,31 @@ function EmailField({ initial }: { initial: string | undefined }) {
   );
 }
 
+/**
+ * The code step's field. It is controlled for the same reason as the email field: React resets an
+ * uncontrolled field when an action ends, which emptied it over a code typed while the request was
+ * pending (#59). A failed request leaves what is typed, so a short or wrong code can be fixed.
+ */
+function CodeField() {
+  const [code, setCode] = useState("");
+
+  return (
+    <>
+      <label htmlFor="code">Mã</label>
+      <input
+        id="code"
+        name="code"
+        type="text"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        value={code}
+        onChange={(event) => setCode(event.target.value)}
+        required
+      />
+    </>
+  );
+}
+
 export function SignInForm() {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
 
@@ -44,15 +69,7 @@ export function SignInForm() {
         <>
           <input type="hidden" name="email" value={state.email} />
           <p>{copy.codePrompt(state.email)}</p>
-          <label htmlFor="code">Mã</label>
-          <input
-            id="code"
-            name="code"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            required
-          />
+          <CodeField />
         </>
       )}
       {state.error && (
