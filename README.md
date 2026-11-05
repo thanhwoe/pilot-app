@@ -21,3 +21,5 @@ Sign-in codes are written to the API log; no email is sent yet.
 - Mobile: press `i` (iOS Simulator) or `a` (Android emulator) in the Expo terminal; sign in with your email and the code from the API log
 
 See [CLAUDE.md](CLAUDE.md) for the layout, commands and rules, and [REVIEW.md](REVIEW.md) for the review checklist.
+
+<!-- throwaway: evidence for #74 AC 2 -->
