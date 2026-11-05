@@ -58,6 +58,7 @@ jobs:
       # trap signals the whole process group: otherwise run.sh keeps the lock and the simulator, and
       # the cleanup below waits for a lock that is never released.
       - name: Maestro flows on iOS
+        if: false # harness: only the cleanup is under test
         run: |
           rm -f apps/mobile/e2e/api.log
           mkdir -p "$RUNNER_TEMP/e2e-out"
@@ -72,7 +73,7 @@ jobs:
           save_log
           exit "$status"
       - name: Maestro flows on Android
-        if: ${{ !cancelled() }}
+        if: false # harness: only the cleanup is under test
         run: |
           rm -f apps/mobile/e2e/api.log
           mkdir -p "$RUNNER_TEMP/e2e-out"
@@ -101,6 +102,27 @@ jobs:
           path: ${{ runner.temp }}/e2e-out/
           if-no-files-found: warn
           retention-days: 7
+      # Throwaway harness for #74 AC 3 and AC 4. Not for merge.
+      - name: "Harness: a stand-in leftover API on 3101, and listeners on 3199 and 3001"
+        run: |
+          listen() {
+            nohup node -e "require('net').createServer().listen($1)" >/dev/null 2>&1 &
+            echo $! >"$RUNNER_TEMP/listener-$1"
+          }
+          listen 3101
+          listen 3199
+          if lsof -nP -iTCP:3001 -sTCP:LISTEN -t >/dev/null; then
+            echo "3001 is already held by something else on the runner; leaving it as it is."
+            rm -f "$RUNNER_TEMP/listener-3001"
+          else
+            listen 3001
+          fi
+          sleep 2
+          lsof -nP -iTCP:3101 -sTCP:LISTEN -t | sort >"$RUNNER_TEMP/3101-before"
+          lsof -nP -iTCP:3199 -sTCP:LISTEN -t | sort >"$RUNNER_TEMP/3199-before"
+          lsof -nP -iTCP:3001 -sTCP:LISTEN -t | sort >"$RUNNER_TEMP/3001-before"
+          for p in 3101 3199 3001; do echo "Before the cleanup, $p: $(tr '\n' ' ' <"$RUNNER_TEMP/$p-before")"; done
+          [ -s "$RUNNER_TEMP/3101-before" ] && [ -s "$RUNNER_TEMP/3199-before" ] && [ -s "$RUNNER_TEMP/3001-before" ]
       # Leave the machine free for the next session. It takes the e2e lock first, so it never shuts
       # down a device or a port 3101 listener another end-to-end run is using; if the lock stays held
       # it stops nothing.
@@ -134,3 +156,53 @@ jobs:
           SCRIPT
           E2E_LOCK_WAIT=120 scripts/e2e-lock.sh bash "$RUNNER_TEMP/cleanup.sh" ||
             echo "::warning::Could not shut down the simulator and emulator; the e2e lock was held or a command failed."
+      - name: "Harness: AC 3 and AC 4 after the cleanup"
+        if: always()
+        run: |
+          fail=0
+          if lsof -nP -iTCP:3101 -sTCP:LISTEN -t >/dev/null; then
+            echo "::error::AC 3: 3101 is still held: $(lsof -nP -iTCP:3101 -sTCP:LISTEN)"; fail=1
+          else
+            echo "AC 3: 3101 is free after the cleanup."
+          fi
+          for p in 3199 3001; do
+            now=$(lsof -nP -iTCP:$p -sTCP:LISTEN -t | sort | tr '\n' ' ')
+            before=$(tr '\n' ' ' <"$RUNNER_TEMP/$p-before")
+            if [ -n "$now" ] && [ "$now" = "$before" ]; then
+              echo "AC 4: $p still held by the same pids: $now"
+            else
+              echo "::error::AC 4: $p was held by '$before', now by '$now'"; fail=1
+            fi
+          done
+          exit "$fail"
+      - name: "Harness: AC 4, the lock stays held, so the cleanup stops nothing on 3101"
+        if: always()
+        run: |
+          nohup node -e "require('net').createServer().listen(3101)" >/dev/null 2>&1 &
+          echo $! >"$RUNNER_TEMP/listener-3101b"
+          set -m
+          scripts/e2e-lock.sh sleep 300 >"$RUNNER_TEMP/holder.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/holder"
+          set +m
+          sleep 3
+          echo "Lock holder: $(cat /tmp/gop-e2e.lock/what)"
+          held=$(lsof -nP -iTCP:3101 -sTCP:LISTEN -t | sort | tr '\n' ' ')
+          echo "Before the cleanup, 3101: $held"
+          status=0
+          E2E_LOCK_WAIT=10 scripts/e2e-lock.sh bash "$RUNNER_TEMP/cleanup.sh" || status=$?
+          echo "The cleanup through the held lock exited $status."
+          now=$(lsof -nP -iTCP:3101 -sTCP:LISTEN -t | sort | tr '\n' ' ')
+          echo "After the cleanup, 3101: $now"
+          [ "$status" = 75 ] && [ -n "$held" ] && [ "$now" = "$held" ] && echo "AC 4: lock held, exit 75, 3101 untouched."
+      - name: "Harness: stop the stand-ins and release the lock"
+        if: always()
+        run: |
+          for f in "$RUNNER_TEMP"/listener-*; do
+            [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+          done
+          if [ -f "$RUNNER_TEMP/holder" ]; then
+            kill -TERM -- -"$(cat "$RUNNER_TEMP/holder")" 2>/dev/null || true
+          fi
+          sleep 2
+          lsof -nP -iTCP:3101 -iTCP:3199 -sTCP:LISTEN || echo "3101 and 3199 are free."
+          ls -d /tmp/gop-e2e.lock 2>/dev/null && cat /tmp/gop-e2e.lock/what || echo "The e2e lock is free."
