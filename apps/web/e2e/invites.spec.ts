@@ -1,5 +1,5 @@
 import { type Browser, expect, type Page, test } from "@playwright/test";
-import { signIn, uniqueEmail } from "./helpers";
+import { devCode, goToCodeStep, signIn, uniqueEmail } from "./helpers";
 import { WEB_URL } from "./servers";
 
 const BAD_LINK = "Liên kết mời này không dùng được. Hãy xin người mời bạn một liên kết mới.";
@@ -195,4 +195,59 @@ test("[security] #94 AC 5, 7: pressing join on a link a member has just replaced
   await bao.goto("/");
   await expect(bao.getByText("Bạn chưa có nhóm nào.")).toBeVisible();
   await bao.context().close();
+});
+
+/** Signs in through the page the browser is on, which must be the sign-in page. */
+async function signInHere(page: Page, email: string) {
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Gửi mã" }).click();
+  await expect(page.getByLabel("Mã")).toBeVisible();
+  await page.getByLabel("Mã").fill(await devCode(email));
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+}
+
+test("#94 AC 4: a signed-out visitor who opens an invite signs in and comes back to it", async ({
+  page,
+  browser,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  await createGroup(page, "Đà Lạt");
+  const link = await makeLink(page, "Đà Lạt");
+  const context = await browser.newContext({ baseURL: WEB_URL });
+  const visitor = await context.newPage();
+
+  await visitor.goto(link);
+
+  await expect(visitor).toHaveURL(/\/sign-in\?next=%2Finvite%2F[A-Za-z0-9_-]{43}$/);
+  await signInHere(visitor, `bao-${uniqueEmail(testInfo)}`);
+
+  await expect(visitor).toHaveURL(link);
+  await expect(
+    visitor.getByRole("heading", { name: "Bạn được mời vào nhóm “Đà Lạt”" }),
+  ).toBeVisible();
+  await visitor.getByRole("button", { name: "Tham gia nhóm" }).click();
+  await expect(visitor).toHaveURL("/");
+  await expect(row(visitor, "Đà Lạt")).toContainText("2 thành viên");
+  await context.close();
+});
+
+test("[security] #94 AC 4: a sign-in page opened with a next address that is not an invite goes to the groups list", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/sign-in?next=https%3A%2F%2Fexample.com%2Finvite%2F" + "A".repeat(43));
+
+  await signInHere(page, uniqueEmail(testInfo));
+
+  await expect(page).toHaveURL("/");
+});
+
+test("#94 AC 4: a visitor who goes to sign-in without an invite lands on the groups list as before", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  await goToCodeStep(page, email);
+  await page.getByLabel("Mã").fill(await devCode(email));
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+
+  await expect(page).toHaveURL("/");
 });
