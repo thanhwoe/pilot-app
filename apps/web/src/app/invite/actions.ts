@@ -1,6 +1,12 @@
 "use server";
 
-import { isInviteLinkSignedOut, makeInviteLink } from "@gop/shared";
+import {
+  acceptInvite,
+  groupsCopy,
+  invitesCopy,
+  isInviteLinkSignedOut,
+  makeInviteLink,
+} from "@gop/shared";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { groupsApi } from "@/lib/api";
@@ -35,4 +41,38 @@ export async function createInviteAction(
     return { error: outcome.error };
   }
   return { token: outcome.token };
+}
+
+export interface JoinGroupState {
+  error?: string;
+}
+
+/**
+ * The join button on an invite page. A link that doesn't work, for any reason, shows one message
+ * and joins no one. Joining as a member changes nothing. On success it goes to the groups list.
+ */
+export async function joinGroupAction(
+  _previous: JoinGroupState,
+  form: FormData,
+): Promise<JoinGroupState> {
+  const session = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!session) {
+    redirect("/sign-in");
+  }
+  const inviteToken = form.get("token");
+  const outcome = await acceptInvite(
+    groupsApi(),
+    session,
+    typeof inviteToken === "string" ? inviteToken : "",
+  );
+  if (outcome.kind === "signed-out") {
+    return endRejectedSessionInAction();
+  }
+  if (outcome.kind === "bad-link") {
+    return { error: invitesCopy.badLink };
+  }
+  if (outcome.kind === "unavailable") {
+    return { error: groupsCopy.unavailable };
+  }
+  redirect("/");
 }
