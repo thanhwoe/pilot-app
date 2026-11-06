@@ -1,3 +1,4 @@
+import { Writable } from "node:stream";
 import {
   errorResponseSchema,
   meResponseSchema,
@@ -8,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
 import { createMemoryGroupStore } from "../groups/memory-store";
 import { createMemoryAuthStore } from "./memory-store";
+import { createResendCodeSender } from "./resend-code-sender";
 import { hashSecret } from "./secrets";
 
 const authSecret = "test-secret-that-is-at-least-32-characters";
@@ -363,5 +365,63 @@ describe("POST /auth/sign-out", () => {
 
     expect(res.statusCode).toBe(401);
     expect(errorResponseSchema.parse(res.json())).toEqual({ error: "unauthorized" });
+  });
+});
+
+describe("POST /auth/code when the email provider fails", () => {
+  const apiKey = "re_test_key_123";
+  const providerDetail = "provider-secret-detail";
+
+  /** An app with the real Resend sender on a fake `fetch`, and the log it wrote. */
+  function setupWithProvider(fetch: typeof globalThis.fetch) {
+    const authStore = createMemoryAuthStore();
+    const lines: string[] = [];
+    const stream = new Writable({
+      write(chunk, _encoding, done) {
+        lines.push(chunk.toString());
+        done();
+      },
+    });
+    const app = buildApp({
+      pingDb: async () => true,
+      corsOrigins: [],
+      version: "1.2.3",
+      authStore,
+      groupStore: createMemoryGroupStore(),
+      authSecret,
+      sendSignInCode: createResendCodeSender({ apiKey, fetch }),
+      logger: { level: "trace", stream },
+    });
+    return { app, authStore, log: () => lines.join("") };
+  }
+
+  it.each([
+    [
+      "answers 500 with a body of its own",
+      async () => new Response(JSON.stringify({ message: providerDetail }), { status: 500 }),
+    ],
+    [
+      "rejects the request",
+      async () => {
+        throw new Error(`${providerDetail} ${apiKey}`);
+      },
+    ],
+  ])("answers a generic 500 when the provider %s", async (_name, fetch) => {
+    const { app, authStore, log } = setupWithProvider(fetch);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/code",
+      payload: { email: "ana@example.com" },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ message: "Could not send the sign-in code" });
+    expect(await authStore.countCodesSince("ana@example.com", new Date(0))).toBe(1);
+    for (const secret of [providerDetail, apiKey]) {
+      expect(res.body).not.toContain(secret);
+      expect(log()).not.toContain(secret);
+    }
+    expect(log()).not.toMatch(/"code":/);
   });
 });
