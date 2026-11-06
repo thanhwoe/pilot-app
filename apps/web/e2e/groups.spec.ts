@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { endSession, sessionCookie, signIn, uniqueEmail } from "./helpers";
+import { endSession, holdFirstServerAction, sessionCookie, signIn, uniqueEmail } from "./helpers";
 
 function groupsList(page: Page) {
   return page.getByRole("list", { name: "Nhóm của tôi" });
@@ -89,6 +89,76 @@ test("#20 AC 3: a valid name after a failed create creates the group and clears 
   await expect(items.first()).toContainText("1 thành viên");
   await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
   await expect(page.locator("main").getByRole("alert")).toBeHidden();
+});
+
+test("#72 AC 5: two creates with the same name each clear the field", async ({
+  page,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  const items = groupsList(page).getByRole("listitem");
+
+  await createGroup(page, "Đà Lạt");
+  await expect(items).toHaveCount(1);
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
+
+  // The API allows two groups with one name. The second result carries the same name as the
+  // first, so a field that cleared only when the name changed would keep it.
+  await createGroup(page, "Đà Lạt");
+  await expect(items).toHaveCount(2);
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
+});
+
+test("#51 AC 1: text typed while a failed create is pending is not overwritten when it ends", async ({
+  page,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  // Hold only the first Server Action the form sends, so the test can type while it is pending.
+  // That is what a slow CI run does to #20 AC 3: the next name is typed before the first create
+  // has ended, and the form reset after the action must not put the old name back over it.
+  const { held, release } = await holdFirstServerAction(page, "/");
+
+  await createGroup(page, "   ");
+  // Without a held request this test would pass for no reason: it times out here instead.
+  await held;
+  await page.getByLabel("Tên nhóm").fill("Đà Lạt");
+  release();
+
+  await expect(page.locator("main").getByRole("alert")).toHaveText("Hãy nhập tên nhóm.");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("Đà Lạt");
+  await page.getByRole("button", { name: "Tạo nhóm" }).click();
+  const items = groupsList(page).getByRole("listitem");
+  await expect(items).toHaveCount(1);
+  await expect(items.first()).toContainText("Đà Lạt");
+  await expect(items.first()).toContainText("1 thành viên");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
+  await expect(page.locator("main").getByRole("alert")).toBeHidden();
+});
+
+test("#54 AC 3, 4: text typed while a create is pending is kept when it succeeds, and a name left alone is cleared", async ({
+  page,
+}, testInfo) => {
+  await signIn(page, uniqueEmail(testInfo));
+  const { held, release } = await holdFirstServerAction(page, "/");
+
+  await createGroup(page, "Đà Lạt");
+  // Without a held request this test would pass for no reason: it times out here instead.
+  await held;
+  await page.getByLabel("Tên nhóm").fill("Nhà");
+  release();
+
+  const items = groupsList(page).getByRole("listitem");
+  await expect(items).toHaveCount(1);
+  await expect(items.first()).toContainText("Đà Lạt");
+  // The list and the success state arrive together, and the form's effect runs just after the
+  // commit. Wait for a frame, so "Nhà" is checked after the form has handled the success rather
+  // than before it.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("Nhà");
+  // The second create is not held, and nothing is typed while it runs: the field is cleared.
+  await page.getByRole("button", { name: "Tạo nhóm" }).click();
+  await expect(items).toHaveCount(2);
+  await expect(items.first()).toContainText("Nhà");
+  await expect(page.getByLabel("Tên nhóm")).toHaveValue("");
 });
 
 test("createGroupAction without a session sends me to sign-in", async ({ page }, testInfo) => {

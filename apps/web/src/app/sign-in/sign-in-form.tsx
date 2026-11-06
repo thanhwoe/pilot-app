@@ -2,6 +2,7 @@
 
 import { signInCopy as copy, type SignInState } from "@gop/shared";
 import { useActionState } from "react";
+import { ActionTextField } from "../action-text-field";
 import { signInAction } from "./actions";
 
 const initialState: SignInState = { step: "email" };
@@ -15,13 +16,15 @@ export function SignInForm() {
       {state.step === "email" ? (
         <>
           <label htmlFor="email">Email</label>
-          <input
+          {/* The keys guard a remount on a step change: `initial` is read once, so a reused field would keep the old text. The markup already differs, so no test fails without them. */}
+          <ActionTextField
+            key="email"
             id="email"
             name="email"
             type="text"
             inputMode="email"
             autoComplete="email"
-            defaultValue={state.email}
+            initial={state.email}
             required
           />
         </>
@@ -30,7 +33,8 @@ export function SignInForm() {
           <input type="hidden" name="email" value={state.email} />
           <p>{copy.codePrompt(state.email)}</p>
           <label htmlFor="code">Mã</label>
-          <input
+          <ActionTextField
+            key="code"
             id="code"
             name="code"
             type="text"

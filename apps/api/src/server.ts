@@ -1,9 +1,10 @@
 import { buildApp } from "./app";
+import { signInCodeSenderFor } from "./auth/code-sender";
 import { devCodesFor } from "./auth/dev-codes";
-import { logSignInCode } from "./auth/log-code-sender";
 import { createPostgresAuthStore } from "./auth/store";
 import { createDb } from "./db/client";
 import { env } from "./env";
+import { createPostgresExpenseStore } from "./expenses/store";
 import { createPostgresGroupStore } from "./groups/store";
 import { apiVersion } from "./version";
 
@@ -15,8 +16,9 @@ const app = buildApp({
   logger: true,
   authStore: createPostgresAuthStore(database.db),
   groupStore: createPostgresGroupStore(database.db),
+  expenseStore: createPostgresExpenseStore(database.db),
   authSecret: env.AUTH_SECRET,
-  sendSignInCode: logSignInCode,
+  sendSignInCode: signInCodeSenderFor(env, fetch),
   devCodes: devCodesFor(env),
 });
 

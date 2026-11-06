@@ -1,0 +1,136 @@
+name: Mobile E2E
+
+# Runs the Maestro flows on the Mac mini runner. A separate workflow from ci.yml because `paths:`
+# filters apply to a whole workflow: the check appears only on PRs that touch these paths.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - apps/mobile/**
+      - packages/shared/**
+      - apps/api/**
+      # What the job depends on besides app code: itself, the lock it takes, the lockfile it
+      # installs from and the Postgres it starts.
+      - .github/workflows/mobile-e2e.yml
+      - scripts/e2e-lock.sh
+      - pnpm-lock.yaml
+      - docker-compose.yml
+
+# Never add `pull_request_target` or `workflow_run` here, and never reference a secret: this job
+# runs on a machine we own.
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-e2e:
+    # A fork's code must not run on the self-hosted runner.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64, macos-sim]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A launchd-started runner has a short PATH, without Docker's CLI.
+      - name: Put Docker on PATH
+        run: echo "$HOME/.docker/bin" >> "$GITHUB_PATH"
+      - name: Start Postgres
+        run: pnpm db:up
+      # What is booted before the runs, so the cleanup shuts down only what the runs started.
+      - name: Note the start
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          touch "$RUNNER_TEMP/e2e-start"
+          xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}" >"$RUNNER_TEMP/sims-before" || true
+          adb devices | grep "^emulator-" | grep -w device | cut -f1 >"$RUNNER_TEMP/emus-before" || true
+      # Both runs go through scripts/e2e-lock.sh, which waits for any other end-to-end run on the
+      # machine and says so in the log. run.sh overwrites api.log, so each run's copy is kept. The
+      # exit code is kept too: the Android run still happens after an iOS failure, and the job
+      # fails if either failed. When the run is cancelled the runner stops only this shell, so the
+      # trap signals the whole process group: otherwise run.sh keeps the lock and the simulator, and
+      # the cleanup below waits for a lock that is never released.
+      - name: Maestro flows on iOS
+        run: |
+          rm -f apps/mobile/e2e/api.log
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          save_log() { cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-ios.log" || true; }
+          set -m
+          pnpm --filter @gop/mobile e2e:ios &
+          pid=$!
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid" || true; save_log; exit 143' INT TERM
+          status=0
+          wait "$pid" || status=$?
+          trap - INT TERM
+          save_log
+          exit "$status"
+      - name: Maestro flows on Android
+        if: ${{ !cancelled() }}
+        run: |
+          rm -f apps/mobile/e2e/api.log
+          mkdir -p "$RUNNER_TEMP/e2e-out"
+          save_log() { cp apps/mobile/e2e/api.log "$RUNNER_TEMP/e2e-out/api-android.log" || true; }
+          set -m
+          pnpm --filter @gop/mobile e2e:android &
+          pid=$!
+          trap 'save_log; kill -TERM -- -"$pid"; wait "$pid" || true; save_log; exit 143' INT TERM
+          status=0
+          wait "$pid" || status=$?
+          trap - INT TERM
+          save_log
+          exit "$status"
+      # run.sh passes Maestro no output directory, so its output is in ~/.maestro/tests, one folder
+      # per run. Keep the ones this job made.
+      - name: Collect Maestro output
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-out/maestro"
+          find "$HOME/.maestro/tests" -mindepth 1 -maxdepth 1 -newer "$RUNNER_TEMP/e2e-start" \
+            -exec cp -R {} "$RUNNER_TEMP/e2e-out/maestro/" \; || true
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() || cancelled() }}
+        with:
+          name: mobile-e2e-output
+          path: ${{ runner.temp }}/e2e-out/
+          if-no-files-found: warn
+          retention-days: 7
+      # Leave the machine free for the next session. It takes the e2e lock first, so it never shuts
+      # down a device or a port 3101 listener another end-to-end run is using; if the lock stays held
+      # it stops nothing.
+      - name: Shut down the simulator and emulator this job started
+        if: always()
+        run: |
+          cat >"$RUNNER_TEMP/cleanup.sh" <<'SCRIPT'
+          # A run the runner killed hard can leave its API on 3101, and the next run refuses to start
+          # while anything listens there. Only 3101: the dev API on 3001 is not ours to stop.
+          for pid in $(lsof -nP -iTCP:3101 -sTCP:LISTEN -t); do
+            echo "Port 3101 is held by pid $pid: $(ps -o command= -p "$pid"); stopping it"
+            kill -TERM "$pid" || true
+          done
+          for _ in $(seq 20); do
+            [ -z "$(lsof -nP -iTCP:3101 -sTCP:LISTEN -t)" ] && break
+            sleep 0.5
+          done
+          for pid in $(lsof -nP -iTCP:3101 -sTCP:LISTEN -t); do
+            kill -KILL "$pid" || true
+          done
+          if [ ! -f "$RUNNER_TEMP/sims-before" ] || [ ! -f "$RUNNER_TEMP/emus-before" ]; then
+            echo "The job stopped before it noted what was booted; shutting nothing down."
+            exit 0
+          fi
+          for id in $(xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}"); do
+            grep -qx "$id" "$RUNNER_TEMP/sims-before" || xcrun simctl shutdown "$id"
+          done
+          for serial in $(adb devices | grep "^emulator-" | grep -w device | cut -f1); do
+            grep -qx "$serial" "$RUNNER_TEMP/emus-before" || adb -s "$serial" emu kill
+          done
+          SCRIPT
+          E2E_LOCK_WAIT=120 scripts/e2e-lock.sh bash "$RUNNER_TEMP/cleanup.sh" ||
+            echo "::warning::Could not shut down the simulator and emulator; the e2e lock was held or a command failed."

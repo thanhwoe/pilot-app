@@ -43,6 +43,7 @@ if lsof -ti "tcp:$api_port" -sTCP:LISTEN >/dev/null; then
   exit 1
 fi
 DATABASE_URL="$database_url" PORT="$api_port" NODE_ENV=test DEV_SIGN_IN_CODES=true \
+  RESEND_API_KEY= \
   AUTH_SECRET="e2e-only-secret-not-for-any-real-environment" \
   pnpm --dir "$repo_dir" --filter @gop/api start >"$mobile_dir/e2e/api.log" 2>&1 &
 api_pid=$!
