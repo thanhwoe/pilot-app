@@ -12,7 +12,8 @@ interface MemoryGroupStore extends GroupStore {
  */
 export function createMemoryGroupStore(): MemoryGroupStore {
   const groups = new Map<string, { id: string; name: string; createdAt: Date }>();
-  const members = new Map<string, Set<string>>();
+  /** Each group's members and when they joined. */
+  const members = new Map<string, Map<string, Date>>();
 
   function withCount(groupId: string): StoredGroup {
     const group = groups.get(groupId);
@@ -26,7 +27,7 @@ export function createMemoryGroupStore(): MemoryGroupStore {
     async createGroup({ name, creatorId, now }) {
       const id = randomUUID();
       groups.set(id, { id, name, createdAt: now });
-      members.set(id, new Set([creatorId]));
+      members.set(id, new Map([[creatorId, now]]));
       return withCount(id);
     },
 
@@ -45,8 +46,21 @@ export function createMemoryGroupStore(): MemoryGroupStore {
       return members.get(groupId)?.has(userId) ? withCount(groupId) : null;
     },
 
-    addMember(groupId, userId) {
-      members.get(groupId)?.add(userId);
+    async listMembers(groupId) {
+      return [...(members.get(groupId) ?? [])]
+        .map(([userId, joinedAt]) => ({ userId, joinedAt }))
+        .sort(
+          (a, b) =>
+            a.joinedAt.getTime() - b.joinedAt.getTime() ||
+            (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
+        );
+    },
+
+    addMember(groupId, userId, now) {
+      const group = members.get(groupId);
+      if (group && !group.has(userId)) {
+        group.set(userId, now);
+      }
     },
   };
 }

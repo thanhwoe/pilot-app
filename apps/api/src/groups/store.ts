@@ -1,4 +1,4 @@
-import { and, count, desc, eq, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client";
 import { groupMembers, groups } from "../db/schema";
@@ -9,6 +9,12 @@ export interface StoredGroup {
   name: string;
   memberCount: number;
   createdAt: Date;
+}
+
+/** A member of a group, and when they joined it. */
+export interface GroupMember {
+  userId: string;
+  joinedAt: Date;
 }
 
 export interface NewGroup {
@@ -28,6 +34,11 @@ export interface GroupStore {
    * belongs to it, otherwise null, whether or not the group exists.
    */
   findGroupForMember(groupId: string, userId: string): Promise<StoredGroup | null>;
+  /**
+   * Everyone in the group, in the order they joined; members who joined at the same time go by
+   * user id. Empty for a group that doesn't exist. Callers check membership first.
+   */
+  listMembers(groupId: string): Promise<GroupMember[]>;
 }
 
 export function createPostgresGroupStore(db: Database["db"]): GroupStore {
@@ -73,6 +84,14 @@ export function createPostgresGroupStore(db: Database["db"]): GroupStore {
     async findGroupForMember(groupId, userId) {
       const [group] = await selectGroupsOf(userId, eq(groups.id, groupId));
       return group ?? null;
+    },
+
+    listMembers(groupId) {
+      return db
+        .select({ userId: groupMembers.userId, joinedAt: groupMembers.joinedAt })
+        .from(groupMembers)
+        .where(eq(groupMembers.groupId, groupId))
+        .orderBy(asc(groupMembers.joinedAt), asc(groupMembers.userId));
     },
   };
 }
