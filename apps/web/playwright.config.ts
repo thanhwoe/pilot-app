@@ -23,6 +23,8 @@ export default defineConfig({
         CORS_ORIGINS: WEB_URL,
         NODE_ENV: "test",
         DEV_SIGN_IN_CODES: "true",
+        // Empty, so a key in apps/api/.env can not make the e2e runs email their throwaway addresses.
+        RESEND_API_KEY: "",
         AUTH_SECRET: "e2e-only-secret-not-for-any-real-environment",
       },
     },

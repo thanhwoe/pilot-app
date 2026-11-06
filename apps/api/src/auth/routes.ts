@@ -15,7 +15,10 @@ export interface AuthDeps {
   authStore: AuthStore;
   /** Key for hashing codes and session tokens. */
   authSecret: string;
-  /** Delivers a code. For now it only writes the code to the API log, through `log`. */
+  /**
+   * Delivers a code: by email when `RESEND_API_KEY` is set, otherwise by writing it to the API log
+   * through `log`. A sender that fails throws, and the request answers 500.
+   */
   sendSignInCode: (email: string, code: string, log: FastifyBaseLogger) => Promise<void>;
   now: () => Date;
 }
