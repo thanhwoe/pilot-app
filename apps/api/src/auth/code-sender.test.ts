@@ -9,6 +9,7 @@ describe("resendEnvSchema", () => {
   it("has no key when RESEND_API_KEY is unset or empty", () => {
     expect(resendEnvSchema.parse({}).RESEND_API_KEY).toBeUndefined();
     expect(resendEnvSchema.parse({ RESEND_API_KEY: "" }).RESEND_API_KEY).toBeUndefined();
+    expect(resendEnvSchema.parse({ RESEND_API_KEY: "  " }).RESEND_API_KEY).toBeUndefined();
   });
 
   it("keeps the key when it is set", () => {

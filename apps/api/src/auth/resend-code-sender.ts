@@ -45,6 +45,8 @@ export function createResendCodeSender({
         signal: AbortSignal.timeout(timeoutMs),
       });
       status = response.status;
+      // Nothing reads the body; free the connection and keep provider text out of reach.
+      await response.body?.cancel();
     } catch {
       log.error("Sign-in email could not be sent: no answer from the provider");
       throw new Error(FAILURE_MESSAGE);

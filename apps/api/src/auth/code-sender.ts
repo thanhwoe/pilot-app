@@ -9,7 +9,7 @@ export const resendEnvSchema = z.object({
   RESEND_API_KEY: z
     .string()
     .optional()
-    .transform((value) => (value ? value : undefined)),
+    .transform((value) => value?.trim() || undefined),
 });
 
 export type ResendEnv = z.infer<typeof resendEnvSchema>;

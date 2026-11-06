@@ -64,6 +64,16 @@ describe("createResendCodeSender", () => {
     expect(Object.values(log).flatMap((fn) => fn.mock.calls)).toEqual([]);
   });
 
+  it.each([200, 500])("cancels the response body when Resend answers %i", async (status) => {
+    const cancel = vi.fn();
+    const body = new ReadableStream({ cancel });
+    const fetch = vi.fn(async () => new Response(body, { status }));
+
+    await send(fetch).result.catch(() => undefined);
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it("writes the email as the owner approved, with the code on a line of its own", async () => {
     const fetch = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
