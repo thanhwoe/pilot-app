@@ -22,6 +22,13 @@
       "when": 1793948816954,
       "tag": "0002_flowery_justice",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793957433296,
+      "tag": "0003_bent_giant_man",
+      "breakpoints": true
     }
   ]
 }
