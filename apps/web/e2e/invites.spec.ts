@@ -85,12 +85,21 @@ test("#94 AC 1: a group with no link keeps reading 'Mời thành viên' while an
   await expect(row(page, "Chưa có").getByRole("button", { name: "Mời thành viên" })).toBeVisible();
 });
 
-/** Makes the group's invite link on the groups list and returns the link as shown. */
+/**
+ * Makes the group's invite link on the groups list and returns the link as shown. When a link is
+ * already showing (the button reads "Tạo liên kết mới"), it waits for a different one: until the
+ * action ends, the old link is still in the field.
+ */
 async function makeLink(page: Page, name: string): Promise<string> {
   const group = row(page, name);
-  await group.getByRole("button", { name: /^(Mời thành viên|Tạo liên kết mới)$/ }).click();
   const link = group.getByLabel("Liên kết mời");
-  await expect(link).toHaveValue(/\/invite\//);
+  const before = (await link.count()) > 0 ? await link.inputValue() : null;
+  await group.getByRole("button", { name: /^(Mời thành viên|Tạo liên kết mới)$/ }).click();
+  if (before === null) {
+    await expect(link).toHaveValue(/\/invite\//);
+  } else {
+    await expect(link).not.toHaveValue(before);
+  }
   return link.inputValue();
 }
 
