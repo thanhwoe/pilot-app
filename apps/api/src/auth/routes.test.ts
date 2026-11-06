@@ -7,6 +7,7 @@ import {
 } from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
+import { createMemoryExpenseStore } from "../expenses/memory-store";
 import { createMemoryGroupStore } from "../groups/memory-store";
 import { createMemoryAuthStore } from "./memory-store";
 import { createResendCodeSender } from "./resend-code-sender";
@@ -26,6 +27,7 @@ function setup() {
     version: "1.2.3",
     authStore,
     groupStore: createMemoryGroupStore(),
+    expenseStore: createMemoryExpenseStore(),
     authSecret,
     sendSignInCode: async (email, code) => {
       sent.push({ email, code });
@@ -388,6 +390,7 @@ describe("POST /auth/code when the email provider fails", () => {
       version: "1.2.3",
       authStore,
       groupStore: createMemoryGroupStore(),
+      expenseStore: createMemoryExpenseStore(),
       authSecret,
       sendSignInCode: createResendCodeSender({ apiKey, fetch }),
       logger: { level: "trace", stream },
