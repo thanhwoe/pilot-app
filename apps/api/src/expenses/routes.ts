@@ -1,6 +1,7 @@
 import {
   createExpenseBodySchema,
   type ErrorResponse,
+  type ExpenseListResponse,
   type ExpenseResponse,
   splitEqually,
 } from "@gop/shared";
@@ -73,5 +74,19 @@ export function registerExpenseRoutes(app: FastifyInstance, deps: ExpenseDeps) {
       now: now(),
     });
     return reply.code(201).send(toResponse(expense));
+  });
+
+  app.get<{ Params: { id: string } }>("/groups/:id/expenses", async (request, reply) => {
+    const session = await findSession(request);
+    if (!session) {
+      return reply.code(401).send(unauthorized);
+    }
+    const group = await findGroup(session.user.id, request.params.id);
+    if (!group) {
+      return reply.code(404).send(notFound);
+    }
+    const expenses = await expenseStore.listExpenses(group.id);
+    const response: ExpenseListResponse = { expenses: expenses.map(toResponse) };
+    return response;
   });
 }

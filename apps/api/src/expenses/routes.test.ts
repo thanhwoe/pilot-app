@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type CreateExpenseBody,
   errorResponseSchema,
+  expenseListResponseSchema,
   expenseResponseSchema,
   groupResponseSchema,
   meResponseSchema,
@@ -68,6 +69,13 @@ function setup(stores: { groupStore?: GroupStore; expenseStore?: ExpenseStore } 
         payload: { name: "Chuyến đi" },
       });
       return groupResponseSchema.parse(res.json()).id;
+    },
+    listExpenses(token: string | undefined, groupId: string) {
+      return app.inject({
+        method: "GET",
+        url: `/groups/${groupId}/expenses`,
+        headers: bearer(token),
+      });
     },
     postExpense(token: string | undefined, groupId: string, payload?: unknown) {
       return app.inject({
@@ -275,6 +283,67 @@ describe("POST /groups/:id/expenses", () => {
   });
 });
 
+describe("GET /groups/:id/expenses", () => {
+  it("#95 AC 4: lists a group's expenses newest first with their shares, and no other group's", async () => {
+    const { ana, bao, cy, groupId, body, postExpense, listExpenses, createGroup, advance } =
+      await world();
+    const older = expenseResponseSchema.parse(
+      (await postExpense(ana.token, groupId, body({ description: "Cũ" }))).json(),
+    );
+    advance(minute);
+    const newer = expenseResponseSchema.parse(
+      (
+        await postExpense(
+          bao.token,
+          groupId,
+          body({ payerId: bao.id, amount: 100_000, description: "Mới" }),
+        )
+      ).json(),
+    );
+    const otherGroupId = await createGroup(ana.token);
+    await postExpense(ana.token, otherGroupId, {
+      payerId: ana.id,
+      amount: 5_000,
+      description: "Nhóm khác",
+      splitBetween: [ana.id],
+    });
+
+    const res = await listExpenses(cy.token, groupId);
+
+    expect(res.statusCode).toBe(200);
+    expect(expenseListResponseSchema.parse(res.json())).toEqual({ expenses: [newer, older] });
+    expect(newer.createdAt).toBe("2026-11-06T10:01:00.000Z");
+    expect(newer.shares).toHaveLength(3);
+    expect(older.createdAt).toBe("2026-11-06T10:00:00.000Z");
+  });
+
+  it("#95 A5: lists two expenses added at the same moment in one stable order", async () => {
+    const { ana, groupId, body, postExpense, listExpenses } = await world();
+    const first = expenseResponseSchema.parse(
+      (await postExpense(ana.token, groupId, body({ description: "Một" }))).json(),
+    );
+    const second = expenseResponseSchema.parse(
+      (await postExpense(ana.token, groupId, body({ description: "Hai" }))).json(),
+    );
+
+    const expected = [first, second].sort((x, y) => (x.id < y.id ? 1 : -1));
+    for (let times = 0; times < 3; times++) {
+      expect(
+        expenseListResponseSchema.parse((await listExpenses(ana.token, groupId)).json()),
+      ).toEqual({ expenses: expected });
+    }
+  });
+
+  it("#95 AC 5: answers 200 with an empty list for a group with no expenses", async () => {
+    const { ana, groupId, listExpenses } = await world();
+
+    const res = await listExpenses(ana.token, groupId);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ expenses: [] });
+  });
+});
+
 describe("[security] #95 expense access", () => {
   it("#95 AC 9: answers a group I do not belong to exactly as an id no group has", async () => {
     const { groupId, body, postExpense, expenseStore, signIn } = await world();
@@ -301,6 +370,21 @@ describe("[security] #95 expense access", () => {
     expect(unknown.statusCode).toBe(404);
     expect(unknown.body).toBe(theirs.body);
     expect(await expenseStore.listExpenses(groupId)).toEqual([]);
+  });
+
+  it("#95 AC 9: answers a non-member's list exactly as an id no group has, showing no expense", async () => {
+    const { ana, groupId, body, postExpense, listExpenses, signIn } = await world();
+    await postExpense(ana.token, groupId, body({ description: "Riêng tư" }));
+    const dee = await signIn("dee@example.com");
+
+    const theirs = await listExpenses(dee.token, groupId);
+    const unknown = await listExpenses(dee.token, randomUUID());
+
+    expect(theirs.statusCode).toBe(404);
+    expect(errorResponseSchema.parse(theirs.json())).toEqual({ error: "not_found" });
+    expect(unknown.statusCode).toBe(theirs.statusCode);
+    expect(unknown.body).toBe(theirs.body);
+    expect(theirs.body).not.toContain("Riêng tư");
   });
 
   it("#95 AC 9: does not let a non-member be named as the payer or in the split", async () => {
@@ -346,6 +430,15 @@ describe("[security] #95 expense access", () => {
       expect(await app.expenseStore.listExpenses(groupId)).toEqual([]);
     });
 
+    it("on GET /groups/:id/expenses", async () => {
+      const { app, groupId, cases } = await tokens();
+      for (const [label, token] of cases) {
+        const res = await app.listExpenses(token, groupId);
+        expect(res.statusCode, label).toBe(401);
+        expect(res.json(), label).toEqual({ error: "unauthorized" });
+      }
+    });
+
     it("checks the session before the body", async () => {
       const { app, groupId } = await tokens();
 
@@ -365,10 +458,19 @@ describe("[security] #95 expense access", () => {
       expect(res.json()).toEqual({ error: "not_found" });
     });
 
+    it("on the in-memory stores, for the list too", async () => {
+      const { ana, listExpenses } = await world();
+
+      const res = await listExpenses(ana.token, "not-a-uuid");
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({ error: "not_found" });
+    });
+
     it("on Postgres too, which rejects non-UUIDs", async () => {
       const testDb = await createTestDb();
       try {
-        const { signIn, postExpense } = setup({
+        const { signIn, postExpense, listExpenses } = setup({
           groupStore: createPostgresGroupStore(testDb.database.db),
           expenseStore: createPostgresExpenseStore(testDb.database.db),
         });
@@ -383,6 +485,9 @@ describe("[security] #95 expense access", () => {
 
         expect(res.statusCode).toBe(404);
         expect(res.json()).toEqual({ error: "not_found" });
+        const list = await listExpenses(ana.token, "not-a-uuid");
+        expect(list.statusCode).toBe(404);
+        expect(list.json()).toEqual({ error: "not_found" });
       } finally {
         await testDb.drop();
       }
