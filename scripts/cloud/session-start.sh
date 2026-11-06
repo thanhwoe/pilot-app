@@ -60,12 +60,26 @@ start_local_db() {
     su postgres -c "createdb -O gop gop" || return 1
   fi
 }
+db_up=1
 if start_docker_db >>"$log" 2>&1; then
   status+=("Postgres 18 up in Docker")
 elif start_local_db >>"$log" 2>&1; then
   status+=("Postgres up, but the image's PostgreSQL 16, not 18: Docker failed (see $log)")
 else
+  db_up=0
   status+=("Postgres NOT running (see $log)")
+fi
+
+# The dev database that `verify` and a hand-run API use. A new container has no tables, and the
+# tests make databases of their own, so migrate it here (#96). Migrations that already ran are
+# skipped.
+if [ "$db_up" = 1 ]; then
+  if DATABASE_URL="${DATABASE_URL:-postgres://gop:gop@localhost:5432/gop}" \
+    pnpm --filter @gop/api db:migrate >>"$log" 2>&1; then
+    status+=("dev database migrated")
+  else
+    status+=("dev database migration FAILED (see $log)")
+  fi
 fi
 
 joined=$(printf '%s; ' "${status[@]}")
