@@ -1,9 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { safeReturnPath } from "./lib/return-path";
 import { SESSION_COOKIE } from "./lib/session-cookie";
 
 /**
  * Sends signed-out visitors to sign-in, and signed-in ones away from it. It only checks that the cookie exists and never calls the
- * API: the home page's `GET /me` decides whether the session is valid.
+ * API: the home page's `GET /me` decides whether the session is valid. A signed-out visitor who
+ * opens an invite goes to sign-in with the invite's address in `next`, so sign-in can bring them
+ * back to it (#94).
  */
 export function proxy(request: NextRequest) {
   // Server Actions post to the page they live on; redirect page loads only, never those.
@@ -14,6 +17,14 @@ export function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/" && !hasSession) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
+  if (request.nextUrl.pathname.startsWith("/invite/") && !hasSession) {
+    const signIn = new URL("/sign-in", request.url);
+    const next = safeReturnPath(request.nextUrl.pathname);
+    if (next !== "/") {
+      signIn.searchParams.set("next", next);
+    }
+    return NextResponse.redirect(signIn);
+  }
   if (request.nextUrl.pathname === "/sign-in" && hasSession) {
     return NextResponse.redirect(new URL("/", request.url));
   }
@@ -21,5 +32,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/sign-in"],
+  matcher: ["/", "/sign-in", "/invite/:path*"],
 };

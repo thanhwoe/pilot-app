@@ -4,6 +4,7 @@ import { changeEmail, type SignInState, submitCode, submitEmail } from "@gop/sha
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authApi } from "@/lib/api";
+import { safeReturnPath } from "@/lib/return-path";
 import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session-cookie";
 
 /** A form field as a string; a missing or file field reads as empty, which the schemas reject. */
@@ -27,5 +28,6 @@ export async function signInAction(_previous: SignInState, form: FormData): Prom
     return outcome;
   }
   (await cookies()).set(SESSION_COOKIE, outcome.token, sessionCookieOptions(process.env.NODE_ENV));
-  redirect("/");
+  // Back to the invite the visitor came from; anything else in `next` is ignored (#94).
+  redirect(safeReturnPath(form.get("next")));
 }
