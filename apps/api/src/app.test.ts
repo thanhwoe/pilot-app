@@ -3,12 +3,14 @@ import { healthResponseSchema } from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "./app";
 import { createMemoryAuthStore } from "./auth/memory-store";
+import { createMemoryExpenseStore } from "./expenses/memory-store";
 import { createMemoryGroupStore } from "./groups/memory-store";
 import { apiVersion } from "./version";
 
 const authDeps = {
   authStore: createMemoryAuthStore(),
   groupStore: createMemoryGroupStore(),
+  expenseStore: createMemoryExpenseStore(),
   authSecret: "test-secret-that-is-at-least-32-characters",
   sendSignInCode: async () => {},
 };

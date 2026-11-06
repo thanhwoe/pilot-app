@@ -2,6 +2,7 @@ import { Writable } from "node:stream";
 import { signInResponseSchema } from "@gop/shared";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
+import { createMemoryExpenseStore } from "../expenses/memory-store";
 import { createMemoryGroupStore } from "../groups/memory-store";
 import { logSignInCode } from "./log-code-sender";
 import { createMemoryAuthStore } from "./memory-store";
@@ -22,6 +23,7 @@ async function signInWithLogCaptured() {
     version: "1.2.3",
     authStore: createMemoryAuthStore(),
     groupStore: createMemoryGroupStore(),
+    expenseStore: createMemoryExpenseStore(),
     authSecret: "test-secret-that-is-at-least-32-characters",
     sendSignInCode: logSignInCode,
     logger: { level: "trace", stream },
@@ -81,6 +83,7 @@ describe("API log during sign-in with the email sender", () => {
       version: "1.2.3",
       authStore: createMemoryAuthStore(),
       groupStore: createMemoryGroupStore(),
+      expenseStore: createMemoryExpenseStore(),
       authSecret: "test-secret-that-is-at-least-32-characters",
       sendSignInCode: createResendCodeSender({ apiKey, fetch }),
       logger: { level: "trace", stream },

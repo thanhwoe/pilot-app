@@ -19,6 +19,8 @@ describe("createTestDb", () => {
     );
 
     expect(rows.map((row) => row.table_name)).toEqual([
+      "expense_shares",
+      "expenses",
       "group_members",
       "groups",
       "sessions",

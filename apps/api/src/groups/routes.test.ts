@@ -9,6 +9,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app";
 import { createMemoryAuthStore } from "../auth/memory-store";
+import { createMemoryExpenseStore } from "../expenses/memory-store";
 import { createTestDb } from "../test/db";
 import { createMemoryGroupStore } from "./memory-store";
 import { createPostgresGroupStore, type GroupStore } from "./store";
@@ -26,6 +27,7 @@ function setup(groupStore: GroupStore = createMemoryGroupStore()) {
     version: "1.2.3",
     authStore: createMemoryAuthStore(),
     groupStore,
+    expenseStore: createMemoryExpenseStore(),
     authSecret,
     sendSignInCode: async (email, code) => {
       sent.push({ email, code });

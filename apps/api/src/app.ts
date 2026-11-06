@@ -3,6 +3,8 @@ import type { HealthResponse } from "@gop/shared";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import { type DevCodes, registerDevCodeRoute } from "./auth/dev-codes";
 import { type AuthDeps, registerAuthRoutes } from "./auth/routes";
+import { registerExpenseRoutes } from "./expenses/routes";
+import type { ExpenseStore } from "./expenses/store";
 import { registerGroupRoutes } from "./groups/routes";
 import type { GroupStore } from "./groups/store";
 
@@ -19,6 +21,7 @@ export interface AppDeps extends Omit<AuthDeps, "now"> {
   /** Set only when the dev code endpoint is on. See `devCodesFor`. */
   devCodes?: DevCodes;
   groupStore: GroupStore;
+  expenseStore: ExpenseStore;
 }
 
 /** Builds the Fastify app without listening, so tests can call it with `app.inject`. */
@@ -31,6 +34,7 @@ export function buildApp({
   devCodes,
   sendSignInCode,
   groupStore,
+  expenseStore,
   ...auth
 }: AppDeps) {
   const app = Fastify({ logger });
@@ -56,6 +60,7 @@ export function buildApp({
     registerDevCodeRoute(app, devCodes);
   }
   registerGroupRoutes(app, { ...auth, now, groupStore });
+  registerExpenseRoutes(app, { ...auth, now, groupStore, expenseStore });
 
   return app;
 }

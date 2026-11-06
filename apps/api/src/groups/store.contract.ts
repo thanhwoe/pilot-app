@@ -88,6 +88,30 @@ export function describeGroupStoreContract(name: string, open: () => Promise<Gro
       expect(await store.listGroupsForMember(ana)).toEqual([]);
     });
 
+    it("lists a group's members with when they joined, by join time and then user id", async () => {
+      const ana = await harness.newUser();
+      const bao = await harness.newUser();
+      const cy = await harness.newUser();
+      const dee = await harness.newUser();
+      const eli = await harness.newUser();
+      const group = await store.createGroup({ name: "Chuyến đi", creatorId: ana, now: t0 });
+      await harness.addMember(group.id, bao, at(3 * minute));
+      await harness.addMember(group.id, cy, at(minute));
+      await harness.addMember(group.id, dee, at(3 * minute));
+      await harness.addMember(group.id, eli, at(3 * minute));
+
+      const sameTime = [bao, dee, eli].sort((x, y) => (x < y ? -1 : 1));
+      expect(await store.listMembers(group.id)).toEqual([
+        { userId: ana, joinedAt: t0 },
+        { userId: cy, joinedAt: at(minute) },
+        ...sameTime.map((userId) => ({ userId, joinedAt: at(3 * minute) })),
+      ]);
+    });
+
+    it("lists no members for a group that does not exist", async () => {
+      expect(await store.listMembers(randomUUID())).toEqual([]);
+    });
+
     it("finds a group for a member, and for nobody else", async () => {
       const ana = await harness.newUser();
       const bao = await harness.newUser();

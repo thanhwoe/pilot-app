@@ -54,3 +54,37 @@ export const groupMembers = pgTable(
     index("group_members_user_id_idx").on(table.userId),
   ],
 );
+
+/** What one member paid for the group, in whole VND. `payer_id` is a member of the group. */
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    // Restrict, not cascade: removing a user must not silently remove what other people paid.
+    payerId: uuid("payer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    amount: integer("amount").notNull(),
+    description: text("description").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("expenses_group_id_created_at_idx").on(table.groupId, table.createdAt)],
+);
+
+/** What each member of an expense's split owes for it, in whole VND; a share can be 0. */
+export const expenseShares = pgTable(
+  "expense_shares",
+  {
+    expenseId: uuid("expense_id")
+      .notNull()
+      .references(() => expenses.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    amount: integer("amount").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.expenseId, table.userId] })],
+);
