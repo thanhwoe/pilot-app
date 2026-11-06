@@ -10,6 +10,11 @@ export function generateSessionToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
+/** A random group invite token: the same 256 bits, URL-safe, as a session token (#94). */
+export function generateInviteToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
 /**
  * Hashes a code or token with HMAC-SHA256 keyed by `AUTH_SECRET`, so a copy of the database
  * alone can't be used to recover a 6-digit code.

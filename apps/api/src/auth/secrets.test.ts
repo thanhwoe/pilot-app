@@ -1,5 +1,12 @@
+import { inviteTokenSchema } from "@gop/shared";
 import { describe, expect, it } from "vitest";
-import { generateSessionToken, generateSignInCode, hashesMatch, hashSecret } from "./secrets";
+import {
+  generateInviteToken,
+  generateSessionToken,
+  generateSignInCode,
+  hashesMatch,
+  hashSecret,
+} from "./secrets";
 
 const secret = "test-secret-that-is-at-least-32-characters";
 
@@ -18,6 +25,15 @@ describe("generateSessionToken", () => {
 
     expect(first.length).toBeGreaterThanOrEqual(43);
     expect(generateSessionToken()).not.toBe(first);
+  });
+});
+
+describe("generateInviteToken", () => {
+  it("#94 AC 1: makes 43-character URL-safe tokens, different each time", () => {
+    const tokens = Array.from({ length: 200 }, generateInviteToken);
+
+    expect(tokens.every((token) => inviteTokenSchema.safeParse(token).success)).toBe(true);
+    expect(new Set(tokens).size).toBe(200);
   });
 });
 
