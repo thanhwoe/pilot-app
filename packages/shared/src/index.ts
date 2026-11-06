@@ -1,4 +1,6 @@
 export * from "./auth";
+export * from "./balances";
+export * from "./balances/index";
 export * from "./expenses";
 export * from "./expenses/index";
 export * from "./groups";

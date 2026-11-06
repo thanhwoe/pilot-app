@@ -1,9 +1,12 @@
 import {
+  type BalancesResponse,
+  computeBalances,
   createExpenseBodySchema,
   type ErrorResponse,
   type ExpenseListResponse,
   type ExpenseResponse,
   splitEqually,
+  suggestSettlements,
 } from "@gop/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -87,6 +90,28 @@ export function registerExpenseRoutes(app: FastifyInstance, deps: ExpenseDeps) {
     }
     const expenses = await expenseStore.listExpenses(group.id);
     const response: ExpenseListResponse = { expenses: expenses.map(toResponse) };
+    return response;
+  });
+
+  // The same two checks as the list: session (401), then group and membership (404).
+  app.get<{ Params: { id: string } }>("/groups/:id/balances", async (request, reply) => {
+    const session = await findSession(request);
+    if (!session) {
+      return reply.code(401).send(unauthorized);
+    }
+    const group = await findGroup(session.user.id, request.params.id);
+    if (!group) {
+      return reply.code(404).send(notFound);
+    }
+    const [members, expenses] = await Promise.all([
+      groupStore.listMembers(group.id),
+      expenseStore.listExpenses(group.id),
+    ]);
+    const balances = computeBalances(
+      members.map((member) => member.userId),
+      expenses,
+    );
+    const response: BalancesResponse = { balances, suggestions: suggestSettlements(balances) };
     return response;
   });
 }

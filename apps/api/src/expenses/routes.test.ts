@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  balancesResponseSchema,
   type CreateExpenseBody,
   errorResponseSchema,
   expenseListResponseSchema,
@@ -69,6 +70,13 @@ function setup(stores: { groupStore?: GroupStore; expenseStore?: ExpenseStore } 
         payload: { name: "Chuyến đi" },
       });
       return groupResponseSchema.parse(res.json()).id;
+    },
+    getBalances(token: string | undefined, groupId: string) {
+      return app.inject({
+        method: "GET",
+        url: `/groups/${groupId}/balances`,
+        headers: bearer(token),
+      });
     },
     listExpenses(token: string | undefined, groupId: string) {
       return app.inject({
@@ -344,6 +352,72 @@ describe("GET /groups/:id/expenses", () => {
   });
 });
 
+describe("GET /groups/:id/balances", () => {
+  it("#96 AC 1: shows Ana +50000 and Bao -50000 after Ana adds 100000 split between them", async () => {
+    const { ana, bao, cy, groupId, body, postExpense, getBalances } = await world();
+    await postExpense(
+      ana.token,
+      groupId,
+      body({ amount: 100_000, splitBetween: [ana.id, bao.id] }),
+    );
+
+    const res = await getBalances(bao.token, groupId);
+
+    expect(res.statusCode).toBe(200);
+    const parsed = balancesResponseSchema.parse(res.json());
+    expect(
+      Object.fromEntries(parsed.balances.map((entry) => [entry.userId, entry.balance])),
+    ).toEqual({ [ana.id]: 50_000, [bao.id]: -50_000, [cy.id]: 0 });
+    expect(parsed.suggestions).toEqual([{ from: bao.id, to: ana.id, amount: 50_000 }]);
+  });
+
+  it("#96 AC 2, 3: adds up to 0 over several expenses, and the suggestion settles them", async () => {
+    const { ana, bao, cy, groupId, body, postExpense, getBalances } = await world();
+    await postExpense(ana.token, groupId, body());
+    await postExpense(
+      bao.token,
+      groupId,
+      body({ payerId: bao.id, amount: 60_000, splitBetween: [ana.id, bao.id] }),
+    );
+    await postExpense(
+      cy.token,
+      groupId,
+      body({ payerId: cy.id, amount: 100_000, splitBetween: [ana.id] }),
+    );
+
+    const parsed = balancesResponseSchema.parse((await getBalances(ana.token, groupId)).json());
+
+    const balance = Object.fromEntries(
+      parsed.balances.map((entry) => [entry.userId, entry.balance]),
+    );
+    expect(balance).toEqual({ [ana.id]: -70_000, [bao.id]: 0, [cy.id]: 70_000 });
+    expect(parsed.balances.reduce((sum, entry) => sum + entry.balance, 0)).toBe(0);
+    expect(parsed.suggestions).toEqual([{ from: ana.id, to: cy.id, amount: 70_000 }]);
+  });
+
+  it("#96 AC 4, A1: shows every member at 0 and no suggestions for a group with no expenses", async () => {
+    const { ana, bao, cy, groupId, getBalances } = await world();
+
+    const res = await getBalances(cy.token, groupId);
+
+    expect(res.statusCode).toBe(200);
+    expect(balancesResponseSchema.parse(res.json())).toEqual({
+      balances: [ana.id, bao.id, cy.id].sort().map((userId) => ({ userId, balance: 0 })),
+      suggestions: [],
+    });
+  });
+
+  it("#96 A1: lists a member who took no part in any expense, and orders members by id", async () => {
+    const { ana, bao, cy, groupId, body, postExpense, getBalances } = await world();
+    await postExpense(ana.token, groupId, body({ splitBetween: [ana.id, bao.id] }));
+
+    const parsed = balancesResponseSchema.parse((await getBalances(ana.token, groupId)).json());
+
+    expect(parsed.balances.map((entry) => entry.userId)).toEqual([ana.id, bao.id, cy.id].sort());
+    expect(parsed.balances.find((entry) => entry.userId === cy.id)?.balance).toBe(0);
+  });
+});
+
 describe("[security] #95 expense access", () => {
   it("#95 AC 9: answers a group I do not belong to exactly as an id no group has", async () => {
     const { groupId, body, postExpense, expenseStore, signIn } = await world();
@@ -397,6 +471,23 @@ describe("[security] #95 expense access", () => {
     expect(await expenseStore.listExpenses(groupId)).toEqual([]);
   });
 
+  it("#96 AC 5: answers a non-member's balances exactly as an id no group has, naming no member", async () => {
+    const { ana, bao, cy, groupId, body, postExpense, getBalances, signIn } = await world();
+    await postExpense(ana.token, groupId, body());
+    const dee = await signIn("dee@example.com");
+
+    const theirs = await getBalances(dee.token, groupId);
+    const unknown = await getBalances(dee.token, randomUUID());
+
+    expect(theirs.statusCode).toBe(404);
+    expect(errorResponseSchema.parse(theirs.json())).toEqual({ error: "not_found" });
+    expect(unknown.statusCode).toBe(theirs.statusCode);
+    expect(unknown.body).toBe(theirs.body);
+    for (const member of [ana, bao, cy]) {
+      expect(theirs.body).not.toContain(member.id);
+    }
+  });
+
   describe("#95 AC 10: answers 401 without a live session, and stores nothing", () => {
     async function tokens() {
       const app = setup();
@@ -439,6 +530,15 @@ describe("[security] #95 expense access", () => {
       }
     });
 
+    it("on GET /groups/:id/balances (#96 AC 6)", async () => {
+      const { app, groupId, cases } = await tokens();
+      for (const [label, token] of cases) {
+        const res = await app.getBalances(token, groupId);
+        expect(res.statusCode, label).toBe(401);
+        expect(res.json(), label).toEqual({ error: "unauthorized" });
+      }
+    });
+
     it("checks the session before the body", async () => {
       const { app, groupId } = await tokens();
 
@@ -467,10 +567,19 @@ describe("[security] #95 expense access", () => {
       expect(res.json()).toEqual({ error: "not_found" });
     });
 
+    it("#96 AC 7: on the in-memory stores, for the balances too", async () => {
+      const { ana, getBalances } = await world();
+
+      const res = await getBalances(ana.token, "not-a-uuid");
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({ error: "not_found" });
+    });
+
     it("on Postgres too, which rejects non-UUIDs", async () => {
       const testDb = await createTestDb();
       try {
-        const { signIn, postExpense, listExpenses } = setup({
+        const { signIn, postExpense, listExpenses, getBalances } = setup({
           groupStore: createPostgresGroupStore(testDb.database.db),
           expenseStore: createPostgresExpenseStore(testDb.database.db),
         });
@@ -488,6 +597,9 @@ describe("[security] #95 expense access", () => {
         const list = await listExpenses(ana.token, "not-a-uuid");
         expect(list.statusCode).toBe(404);
         expect(list.json()).toEqual({ error: "not_found" });
+        const balances = await getBalances(ana.token, "not-a-uuid");
+        expect(balances.statusCode).toBe(404);
+        expect(balances.json()).toEqual({ error: "not_found" });
       } finally {
         await testDb.drop();
       }
