@@ -15,6 +15,13 @@
       "when": 1793585352640,
       "tag": "0001_sturdy_donald_blake",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793948816954,
+      "tag": "0002_flowery_justice",
+      "breakpoints": true
     }
   ]
 }
