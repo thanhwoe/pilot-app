@@ -1,4 +1,6 @@
 export * from "./auth";
+export * from "./expenses";
+export * from "./expenses/index";
 export * from "./groups";
 export * from "./groups/index";
 export * from "./health";
