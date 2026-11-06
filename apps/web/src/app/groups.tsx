@@ -4,6 +4,7 @@ import { groupsApi } from "@/lib/api";
 import { redirectRejectedSessionFromComponent } from "@/lib/rejected-session";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
 import { CreateGroupForm } from "./create-group-form";
+import { InviteButton } from "./invite-button";
 
 /** Server component: my groups from `GET /groups` on every request, and the create form. */
 export async function Groups() {
@@ -31,6 +32,7 @@ export async function Groups() {
             <li key={group.id}>
               <span className="group-name">{group.name}</span>{" "}
               <span className="group-members">{copy.memberCount(group.memberCount)}</span>
+              <InviteButton groupId={group.id} hasInvite={group.hasInvite} />
             </li>
           ))}
         </ul>

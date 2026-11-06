@@ -133,3 +133,32 @@ a {
 .group-members {
   opacity: 0.7;
 }
+
+.invite {
+  margin-top: 0.25rem;
+}
+
+.invite button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.invite button:disabled {
+  cursor: progress;
+}
+
+.invite-link {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.invite-link input[type="text"] {
+  font: inherit;
+  min-width: 0;
+}
+
+.invite-link p {
+  margin: 0;
+  font-size: 0.875rem;
+}
