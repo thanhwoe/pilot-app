@@ -46,7 +46,11 @@ test("AC 13: my groups show their names and member counts, newest first", async 
   await page.reload();
 
   const items = groupsList(page).getByRole("listitem");
-  await expect(items).toHaveText([/^Nhà.*1 thành viên$/, /^Đà Lạt.*1 thành viên$/]);
+  // Each row ends with its invite button (#94).
+  await expect(items).toHaveText([
+    /^Nhà.*1 thành viênMời thành viên$/,
+    /^Đà Lạt.*1 thành viênMời thành viên$/,
+  ]);
 });
 
 test("AC 16: a name of only spaces shows the empty-name error and creates no group", async ({

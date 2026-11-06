@@ -7,12 +7,17 @@ import { signInAction } from "./actions";
 
 const initialState: SignInState = { step: "email" };
 
-export function SignInForm() {
+/**
+ * `returnTo` is where sign-in goes afterwards: the groups list, or the invite page the visitor
+ * opened. It travels in a hidden field through both steps, and the action checks it again.
+ */
+export function SignInForm({ returnTo = "/" }: { returnTo?: string }) {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
 
   return (
     <form className="sign-in" action={formAction}>
       <input type="hidden" name="step" value={state.step} />
+      {returnTo !== "/" && <input type="hidden" name="next" value={returnTo} />}
       {state.step === "email" ? (
         <>
           <label htmlFor="email">Email</label>

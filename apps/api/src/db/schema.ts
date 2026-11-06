@@ -35,6 +35,11 @@ export const groups = pgTable("groups", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  /**
+   * The hash of the group's invite token, like `sessions.tokenHash`: the token itself is never
+   * stored. Null until a member makes a link; making another replaces it.
+   */
+  inviteTokenHash: text("invite_token_hash").unique(),
 });
 
 /** Who belongs to which group. A group's creator is its first member. */

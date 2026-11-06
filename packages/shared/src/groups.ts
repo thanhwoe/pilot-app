@@ -26,9 +26,48 @@ export const groupResponseSchema = groupSchema;
 
 export type GroupResponse = z.infer<typeof groupResponseSchema>;
 
+/** A group in the caller's list: the group, and whether it has an invite link (#94). */
+export const groupListItemSchema = groupSchema.extend({
+  hasInvite: z.boolean(),
+});
+
+export type GroupListItem = z.infer<typeof groupListItemSchema>;
+
 /** Response of `GET /groups`: the caller's groups, newest first. */
 export const groupListResponseSchema = z.object({
-  groups: z.array(groupSchema),
+  groups: z.array(groupListItemSchema),
 });
 
 export type GroupListResponse = z.infer<typeof groupListResponseSchema>;
+
+/**
+ * An invite token as the API makes it: 32 random bytes as base64url, so 43 characters of letters,
+ * digits, `-` and `_`. The web, the API and the mobile app all check this shape.
+ */
+export const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+/** Response of `POST /groups/:id/invite` (201): the new token. It is shown only this once. */
+export const createInviteResponseSchema = z.object({
+  token: inviteTokenSchema,
+});
+
+export type CreateInviteResponse = z.infer<typeof createInviteResponseSchema>;
+
+/**
+ * Body of `POST /invites/preview` and `POST /invites/join`. Any string passes here, so a wrong
+ * token gets the same answer as a made-up one instead of a different error. The token travels in
+ * a body because the API logs request URLs.
+ */
+export const inviteTokenBodySchema = z.object({
+  token: z.string(),
+});
+
+export type InviteTokenBody = z.infer<typeof inviteTokenBodySchema>;
+
+/** Response of `POST /invites/preview`: what a visitor sees before joining. */
+export const invitePreviewResponseSchema = z.object({
+  groupName: z.string(),
+  alreadyMember: z.boolean(),
+});
+
+export type InvitePreviewResponse = z.infer<typeof invitePreviewResponseSchema>;

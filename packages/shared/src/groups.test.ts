@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import { errorResponseSchema } from "./auth";
 import {
   createGroupBodySchema,
+  createInviteResponseSchema,
   GROUP_NAME_MAX_LENGTH,
+  groupListItemSchema,
   groupListResponseSchema,
   groupNameSchema,
   groupResponseSchema,
+  invitePreviewResponseSchema,
+  inviteTokenBodySchema,
+  inviteTokenSchema,
 } from "./groups";
 
 const group = {
@@ -62,8 +67,63 @@ describe("group responses", () => {
   });
 
   it("parses a list of groups, including an empty one", () => {
-    expect(groupListResponseSchema.parse({ groups: [group] })).toEqual({ groups: [group] });
+    const item = { ...group, hasInvite: false };
+
+    expect(groupListResponseSchema.parse({ groups: [item] })).toEqual({ groups: [item] });
     expect(groupListResponseSchema.parse({ groups: [] })).toEqual({ groups: [] });
+  });
+
+  it("#94 AC 1: a list item says whether the group has an invite link, and needs it", () => {
+    expect(groupListItemSchema.parse({ ...group, hasInvite: true }).hasInvite).toBe(true);
+    expect(groupListItemSchema.safeParse(group).success).toBe(false);
+    expect(groupListItemSchema.safeParse({ ...group, hasInvite: "yes" }).success).toBe(false);
+    expect(groupListResponseSchema.safeParse({ groups: [group] }).success).toBe(false);
+  });
+
+  it("#94: the group a create, a get and a join answer with has no hasInvite", () => {
+    expect(groupResponseSchema.parse({ ...group, hasInvite: true })).toEqual(group);
+  });
+});
+
+describe("invite schemas", () => {
+  const token = "A".repeat(43);
+
+  it("#94 AC 5: accepts a token of 43 characters of letters, digits, - and _", () => {
+    expect(inviteTokenSchema.safeParse(token).success).toBe(true);
+    expect(inviteTokenSchema.safeParse("aB3-_".repeat(8) + "xyz").success).toBe(true);
+  });
+
+  it.each([
+    ["empty", ""],
+    ["42 characters", "A".repeat(42)],
+    ["44 characters", "A".repeat(44)],
+    ["with a +", `${"A".repeat(42)}+`],
+    ["with a /", `${"A".repeat(42)}/`],
+    ["with a =", `${"A".repeat(42)}=`],
+    ["with a space", `${"A".repeat(42)} `],
+    ["with a newline", `${"A".repeat(42)}\n`],
+  ])("#94 AC 5: rejects a token that is %s", (_case, value) => {
+    expect(inviteTokenSchema.safeParse(value).success).toBe(false);
+  });
+
+  it("#94 AC 1: parses the answer to a new link, and rejects a bad token in it", () => {
+    expect(createInviteResponseSchema.parse({ token })).toEqual({ token });
+    expect(createInviteResponseSchema.safeParse({ token: "short" }).success).toBe(false);
+    expect(createInviteResponseSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("#94 AC 5: the body of a preview or a join takes any string as the token, so a wrong one gets the same answer as a made-up one", () => {
+    expect(inviteTokenBodySchema.parse({ token: "anything" })).toEqual({ token: "anything" });
+    expect(inviteTokenBodySchema.parse({ token: "" })).toEqual({ token: "" });
+    expect(inviteTokenBodySchema.safeParse({}).success).toBe(false);
+    expect(inviteTokenBodySchema.safeParse({ token: 42 }).success).toBe(false);
+  });
+
+  it("#94 AC 2, 3: parses the preview of an invite", () => {
+    const preview = { groupName: "Đà Lạt", alreadyMember: false };
+
+    expect(invitePreviewResponseSchema.parse(preview)).toEqual(preview);
+    expect(invitePreviewResponseSchema.safeParse({ groupName: "Đà Lạt" }).success).toBe(false);
   });
 });
 

@@ -48,7 +48,7 @@ async function settle() {
 }
 
 function group(name: string, createdAt: string) {
-  return { id: crypto.randomUUID(), name, memberCount: 1, createdAt };
+  return { id: crypto.randomUUID(), name, memberCount: 1, createdAt, hasInvite: false };
 }
 
 /** Home while a session exists; otherwise a stand-in for the sign-in screen. */

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client";
 import { groupMembers, groups } from "../db/schema";
@@ -9,6 +9,17 @@ export interface StoredGroup {
   name: string;
   memberCount: number;
   createdAt: Date;
+}
+
+/** A group in the caller's list: the group, and whether it has an invite link. */
+export interface StoredGroupListItem extends StoredGroup {
+  hasInvite: boolean;
+}
+
+/** The group an invite link leads to. */
+export interface InviteTarget {
+  id: string;
+  name: string;
 }
 
 /** A member of a group, and when they joined it. */
@@ -28,7 +39,7 @@ export interface GroupStore {
   /** Saves the group and the creator's membership at once, so a group never lacks a member. */
   createGroup(group: NewGroup): Promise<StoredGroup>;
   /** The user's groups, newest first; ties in creation time go by id, descending. */
-  listGroupsForMember(userId: string): Promise<StoredGroup[]>;
+  listGroupsForMember(userId: string): Promise<StoredGroupListItem[]>;
   /**
    * The membership check for every route that reads or writes a group: the group when the user
    * belongs to it, otherwise null, whether or not the group exists.
@@ -39,6 +50,12 @@ export interface GroupStore {
    * user id. Empty for a group that doesn't exist. Callers check membership first.
    */
   listMembers(groupId: string): Promise<GroupMember[]>;
+  /** Keeps the hash of the group's invite token in place of any earlier one, which then finds nothing. */
+  setInviteTokenHash(groupId: string, tokenHash: string): Promise<void>;
+  /** The group whose current invite token has this hash, or null. */
+  findGroupByInviteHash(tokenHash: string): Promise<InviteTarget | null>;
+  /** Makes the user a member. True when they were added, false when they already were one. */
+  joinGroup(groupId: string, userId: string, now: Date): Promise<boolean>;
 }
 
 export function createPostgresGroupStore(db: Database["db"]): GroupStore {
@@ -52,6 +69,7 @@ export function createPostgresGroupStore(db: Database["db"]): GroupStore {
         name: groups.name,
         createdAt: groups.createdAt,
         memberCount: count(groupMembers.userId),
+        hasInvite: sql<boolean>`${groups.inviteTokenHash} is not null`,
       })
       .from(mine)
       .innerJoin(groups, eq(groups.id, mine.groupId))
@@ -83,7 +101,14 @@ export function createPostgresGroupStore(db: Database["db"]): GroupStore {
 
     async findGroupForMember(groupId, userId) {
       const [group] = await selectGroupsOf(userId, eq(groups.id, groupId));
-      return group ?? null;
+      return group
+        ? {
+            id: group.id,
+            name: group.name,
+            memberCount: group.memberCount,
+            createdAt: group.createdAt,
+          }
+        : null;
     },
 
     listMembers(groupId) {
@@ -92,6 +117,27 @@ export function createPostgresGroupStore(db: Database["db"]): GroupStore {
         .from(groupMembers)
         .where(eq(groupMembers.groupId, groupId))
         .orderBy(asc(groupMembers.joinedAt), asc(groupMembers.userId));
+    },
+
+    async setInviteTokenHash(groupId, tokenHash) {
+      await db.update(groups).set({ inviteTokenHash: tokenHash }).where(eq(groups.id, groupId));
+    },
+
+    async findGroupByInviteHash(tokenHash) {
+      const [group] = await db
+        .select({ id: groups.id, name: groups.name })
+        .from(groups)
+        .where(eq(groups.inviteTokenHash, tokenHash));
+      return group ?? null;
+    },
+
+    async joinGroup(groupId, userId, now) {
+      const added = await db
+        .insert(groupMembers)
+        .values({ groupId, userId, joinedAt: now })
+        .onConflictDoNothing()
+        .returning({ userId: groupMembers.userId });
+      return added.length > 0;
     },
   };
 }

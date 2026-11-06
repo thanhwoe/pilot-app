@@ -98,7 +98,7 @@ function setup(stores: { groupStore?: GroupStore; expenseStore?: ExpenseStore } 
 
 /**
  * Ana's group of Ana (joined first), Bao and Cy. They are members through the in-memory store's
- * `addMember`, standing in for invites. `tie` makes Bao and Cy join at the same moment.
+ * `addMember`, which sets the join time a test needs. `tie` makes Bao and Cy join at the same moment.
  */
 async function world(options: { tie?: boolean } = {}) {
   const app = setup();
