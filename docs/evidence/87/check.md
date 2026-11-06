@@ -1,6 +1,6 @@
 # Evidence for #87: the email code check on a real phone
 
-Checked on 2026-11-06, by the owner, on the Mac mini and one iPhone. The Android half (AC 7) was not run.
+Checked on 2026-11-06, by the owner, on the Mac mini and one iPhone. The Android half (AC 7) was dropped from this issue and not run.
 
 ## Setup
 
@@ -34,4 +34,4 @@ With an address that does not own the key, Resend answered `403` (the `resend.de
 
 ## AC 7: Android
 
-**Not run.** The owner skipped it. It stays unproven. The check is carried by #90.
+**Dropped from #87** by the owner: there is no Android phone to check on. It was not run and stays unproven. The check stays open as #90.
