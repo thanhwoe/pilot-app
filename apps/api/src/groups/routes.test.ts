@@ -79,7 +79,7 @@ describe("POST /groups", () => {
       createdAt: "2026-11-02T10:00:00.000Z",
     });
     expect(groupListResponseSchema.parse((await listGroups(token)).json())).toEqual({
-      groups: [group],
+      groups: [{ ...group, hasInvite: false }],
     });
   });
 
@@ -118,8 +118,8 @@ describe("POST /groups", () => {
 
     expect(second.statusCode).toBe(201);
     expect(groupListResponseSchema.parse((await listGroups(token)).json()).groups).toEqual([
-      groupResponseSchema.parse(second.json()),
-      first,
+      { ...groupResponseSchema.parse(second.json()), hasInvite: false },
+      { ...first, hasInvite: false },
     ]);
   });
 });
@@ -141,12 +141,14 @@ describe("GET /groups", () => {
         name: "Newer",
         memberCount: 1,
         createdAt: "2026-11-02T10:01:00.000Z",
+        hasInvite: false,
       },
       {
         id: expect.any(String),
         name: "Older",
         memberCount: 1,
         createdAt: "2026-11-02T10:00:00.000Z",
+        hasInvite: false,
       },
     ]);
   });

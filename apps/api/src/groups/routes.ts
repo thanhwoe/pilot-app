@@ -1,13 +1,14 @@
 import {
   createGroupBodySchema,
   type ErrorResponse,
+  type GroupListItem,
   type GroupListResponse,
   type GroupResponse,
 } from "@gop/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { createSessionCheck, type SessionDeps } from "../auth/session";
-import type { GroupStore, StoredGroup } from "./store";
+import type { GroupStore, StoredGroup, StoredGroupListItem } from "./store";
 
 export interface GroupDeps extends SessionDeps {
   groupStore: GroupStore;
@@ -22,6 +23,11 @@ const groupIdSchema = z.uuid();
 
 function toResponse(group: StoredGroup): GroupResponse {
   return { ...group, createdAt: group.createdAt.toISOString() };
+}
+
+/** A group in the caller's list: the group, and whether it has an invite link. */
+function toListItem(group: StoredGroupListItem): GroupListItem {
+  return { ...toResponse(group), hasInvite: group.hasInvite };
 }
 
 export function registerGroupRoutes(app: FastifyInstance, deps: GroupDeps) {
@@ -51,7 +57,7 @@ export function registerGroupRoutes(app: FastifyInstance, deps: GroupDeps) {
       return reply.code(401).send(unauthorized);
     }
     const groups = await groupStore.listGroupsForMember(session.user.id);
-    const response: GroupListResponse = { groups: groups.map(toResponse) };
+    const response: GroupListResponse = { groups: groups.map(toListItem) };
     return response;
   });
 

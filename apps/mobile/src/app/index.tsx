@@ -123,7 +123,11 @@ function Groups() {
       setName("");
       if (groups?.kind === "loaded") {
         // The new group is the newest, so it goes first, as the API lists it.
-        setGroups({ kind: "loaded", groups: [outcome.group, ...groups.groups] });
+        // A group that was just made has no invite link yet.
+        setGroups({
+          kind: "loaded",
+          groups: [{ ...outcome.group, hasInvite: false }, ...groups.groups],
+        });
       } else {
         // The first load failed: ask again rather than show the new group as the only one.
         await load();

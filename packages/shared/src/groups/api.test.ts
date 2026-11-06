@@ -8,6 +8,9 @@ const group = {
   createdAt: "2026-11-02T10:00:00.000Z",
 };
 
+const listItem = { ...group, hasInvite: false };
+const inviteToken = "B".repeat(43);
+
 function fakeFetch(status: number, body?: unknown) {
   return vi.fn(
     async () =>
@@ -20,10 +23,10 @@ function fakeFetch(status: number, body?: unknown) {
 
 describe("createGroupsApi", () => {
   it("gets /groups with the bearer token and parses the list", async () => {
-    const fetchFn = fakeFetch(200, { groups: [group] });
+    const fetchFn = fakeFetch(200, { groups: [listItem] });
     const api = createGroupsApi("http://api.test", fetchFn);
 
-    expect(await api.listGroups("t0ken")).toEqual({ ok: true, data: { groups: [group] } });
+    expect(await api.listGroups("t0ken")).toEqual({ ok: true, data: { groups: [listItem] } });
     expect(fetchFn).toHaveBeenCalledWith("http://api.test/groups", {
       headers: { authorization: "Bearer t0ken" },
       signal: expect.any(AbortSignal),
@@ -81,5 +84,72 @@ describe("createGroupsApi", () => {
     const api = createGroupsApi("http://api.test", fetchFn, 10);
 
     expect(await api.listGroups("t0ken")).toEqual({ ok: false, error: "unavailable" });
+  });
+
+  it("#94 AC 1: posts to /groups/:id/invite with the bearer token and parses the new token", async () => {
+    const fetchFn = fakeFetch(201, { token: inviteToken });
+    const api = createGroupsApi("http://api.test", fetchFn);
+
+    expect(await api.createInvite("t0ken", group.id)).toEqual({
+      ok: true,
+      data: { token: inviteToken },
+    });
+    expect(fetchFn).toHaveBeenCalledWith(`http://api.test/groups/${group.id}/invite`, {
+      method: "POST",
+      headers: { authorization: "Bearer t0ken" },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("#94 AC 2: posts the invite token in the body, not the URL, to preview it", async () => {
+    const preview = { groupName: "Đà Lạt", alreadyMember: false };
+    const fetchFn = fakeFetch(200, preview);
+    const api = createGroupsApi("http://api.test", fetchFn);
+
+    expect(await api.previewInvite("t0ken", inviteToken)).toEqual({ ok: true, data: preview });
+    expect(fetchFn).toHaveBeenCalledWith("http://api.test/invites/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer t0ken" },
+      body: JSON.stringify({ token: inviteToken }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("#94 AC 2: posts the invite token in the body, not the URL, to join, and parses the group", async () => {
+    const fetchFn = fakeFetch(200, group);
+    const api = createGroupsApi("http://api.test", fetchFn);
+
+    expect(await api.joinWithInvite("t0ken", inviteToken)).toEqual({ ok: true, data: group });
+    expect(fetchFn).toHaveBeenCalledWith("http://api.test/invites/join", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer t0ken" },
+      body: JSON.stringify({ token: inviteToken }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it.each([
+    [
+      "createInvite",
+      (api: ReturnType<typeof createGroupsApi>) => api.createInvite("t0ken", group.id),
+    ],
+    [
+      "previewInvite",
+      (api: ReturnType<typeof createGroupsApi>) => api.previewInvite("t0ken", inviteToken),
+    ],
+    [
+      "joinWithInvite",
+      (api: ReturnType<typeof createGroupsApi>) => api.joinWithInvite("t0ken", inviteToken),
+    ],
+  ])("#94 AC 5: %s reads a 404 as not_found and a 401 as unauthorized", async (_name, call) => {
+    expect(
+      await call(createGroupsApi("http://api.test", fakeFetch(404, { error: "not_found" }))),
+    ).toEqual({
+      ok: false,
+      error: "not_found",
+    });
+    expect(
+      await call(createGroupsApi("http://api.test", fakeFetch(401, { error: "unauthorized" }))),
+    ).toEqual({ ok: false, error: "unauthorized" });
   });
 });
