@@ -11,13 +11,13 @@ Checked on 2026-11-06, by the owner, on the Mac mini and one iPhone. The Android
 
 ## AC 6: iPhone
 
-| | |
-| --- | --- |
-| Device | iPhone 14 Pro Max |
-| OS | iOS 27.0.1 |
-| Browser | Safari |
-| Mail app | Gmail (not Apple Mail, which the plan assumed) |
-| Transport | `http://` on the LAN |
+|            |                                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Device     | iPhone 14 Pro Max                                                                                                                                                                        |
+| OS         | iOS 27.0.1                                                                                                                                                                               |
+| Browser    | Safari                                                                                                                                                                                   |
+| Mail app   | Gmail (not Apple Mail, which the plan assumed)                                                                                                                                           |
+| Transport  | `http://` on the LAN                                                                                                                                                                     |
 | Email sent | Subject `Mã đăng nhập Góp của bạn`, body with the Vietnamese line, the English line `Your Góp sign-in code is:`, the code on its own line, and the 10-minute line, as approved at gate 2 |
 
 What happened:
