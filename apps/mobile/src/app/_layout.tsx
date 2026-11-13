@@ -1,7 +1,6 @@
 import { signInCopy as copy } from "@gop/shared";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useReturnToPendingInvite } from "@/lib/pending-invite";
 import { SessionProvider, useSession } from "@/lib/session";
 
 export default function RootLayout() {
@@ -15,7 +14,6 @@ export default function RootLayout() {
 
 function RootStack() {
   const { state } = useSession();
-  useReturnToPendingInvite();
   if (state.kind === "loading") {
     return null;
   }

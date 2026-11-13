@@ -1,52 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
-import { router } from "expo-router";
-import { Pressable } from "react-native";
-import { authApi } from "@/lib/api";
-import {
-  setPendingInvite,
-  takePendingInvite,
-  useReturnToPendingInvite,
-} from "@/lib/pending-invite";
-import { SessionProvider, useSession } from "@/lib/session";
-import { secureSessionStore } from "@/lib/session-store";
+import { renderHook } from "@testing-library/react-native";
+import { setPendingInvite, takePendingInvite, usePendingInviteHref } from "@/lib/pending-invite";
 
-jest.mock("expo-secure-store", () => require("@/test-support/secure-store-mock").secureStoreMock());
-
-jest.mock("@/lib/api", () => ({
-  authApi: { requestCode: jest.fn(), signIn: jest.fn(), me: jest.fn(), signOut: jest.fn() },
-}));
-
-const user = { id: "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f", email: "an@example.com" };
 const token = "A".repeat(43);
 
-/** Something that holds the hook, with a button that signs in, as the sign-in screen does. */
-function Probe() {
-  const { signIn, signOut } = useSession();
-  useReturnToPendingInvite();
-  return (
-    <>
-      <Pressable testID="sign-in" onPress={() => signIn({ email: user.email, code: "123456" })} />
-      <Pressable testID="sign-out" onPress={() => signOut()} />
-    </>
-  );
-}
-
-async function renderProbe() {
-  await render(
-    <SessionProvider>
-      <Probe />
-    </SessionProvider>,
-  );
-  await screen.findByTestId("sign-in");
-}
-
-beforeEach(async () => {
-  jest.resetAllMocks();
+beforeEach(() => {
   takePendingInvite();
-  await secureSessionStore.delete();
-  jest.mocked(authApi.signIn).mockResolvedValue({ ok: true, data: { token: "t0ken", user } });
-  jest.mocked(authApi.signOut).mockResolvedValue({ ok: true, data: null });
-  jest.spyOn(router, "replace").mockImplementation(() => {});
 });
 
 // #98 AC 3: the app comes back to the invite only for a token that could be an invite.
@@ -86,66 +44,37 @@ describe("setPendingInvite", () => {
   });
 });
 
-describe("useReturnToPendingInvite", () => {
-  test("goes to the pending invite once the session turns signed in, and forgets it", async () => {
-    await renderProbe();
+describe("usePendingInviteHref", () => {
+  test("gives the pending invite's path once, and forgets it", async () => {
     setPendingInvite(token);
-    expect(router.replace).not.toHaveBeenCalled();
 
-    await fireEvent.press(screen.getByTestId("sign-in"));
+    const { result } = await renderHook(() => usePendingInviteHref());
 
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith(`/invite/${token}`));
-    expect(router.replace).toHaveBeenCalledTimes(1);
+    expect(result.current).toBe(`/invite/${token}`);
     expect(takePendingInvite()).toBeNull();
   });
 
-  test("does nothing when no invite is pending", async () => {
-    await renderProbe();
+  test("gives nothing when no invite is pending", async () => {
+    const { result } = await renderHook(() => usePendingInviteHref());
 
-    await fireEvent.press(screen.getByTestId("sign-in"));
-    await screen.findByTestId("sign-out");
-    await act(async () => {});
-
-    expect(router.replace).not.toHaveBeenCalled();
+    expect(result.current).toBeNull();
   });
 
-  test("does nothing while the session is signed out", async () => {
-    await renderProbe();
-
+  test("a screen that opens later does not return to the same invite", async () => {
     setPendingInvite(token);
-    await act(async () => {});
+    await renderHook(() => usePendingInviteHref());
 
-    expect(router.replace).not.toHaveBeenCalled();
-    expect(takePendingInvite()).toBe(token);
+    const { result } = await renderHook(() => usePendingInviteHref());
+
+    expect(result.current).toBeNull();
   });
 
-  test("does nothing while the session is still loading", async () => {
-    await secureSessionStore.set("old-token");
-    jest.mocked(authApi.me).mockReturnValue(new Promise(() => {}));
+  test("keeps its answer across re-renders of the same screen", async () => {
     setPendingInvite(token);
+    const { result, rerender } = await renderHook(() => usePendingInviteHref());
 
-    await render(
-      <SessionProvider>
-        <Probe />
-      </SessionProvider>,
-    );
-    await act(async () => {});
+    await rerender({});
 
-    expect(router.replace).not.toHaveBeenCalled();
-    expect(takePendingInvite()).toBe(token);
-  });
-
-  test("a later sign-in does not return to the same invite", async () => {
-    await renderProbe();
-    setPendingInvite(token);
-    await fireEvent.press(screen.getByTestId("sign-in"));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledTimes(1));
-
-    await fireEvent.press(screen.getByTestId("sign-out"));
-    await fireEvent.press(await screen.findByTestId("sign-in"));
-    await screen.findByTestId("sign-out");
-    await act(async () => {});
-
-    expect(router.replace).toHaveBeenCalledTimes(1);
+    expect(result.current).toBe(`/invite/${token}`);
   });
 });

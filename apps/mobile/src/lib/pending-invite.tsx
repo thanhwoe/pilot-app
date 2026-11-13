@@ -1,7 +1,5 @@
 import { inviteTokenSchema } from "@gop/shared";
-import { router } from "expo-router";
-import { useEffect } from "react";
-import { useSession } from "./session";
+import { useState } from "react";
 
 /**
  * The token of an invite that a signed-out visitor opened, kept so the app can come back to it
@@ -30,20 +28,15 @@ export function takePendingInvite(): string | null {
 }
 
 /**
- * Goes to the pending invite when the session turns signed in. It belongs in the root layout,
- * where the guard flips: the sign-in screen is gone by then.
+ * Where the home screen sends someone who signed in from an invite link: the invite's path, once,
+ * or null. The home screen renders a `Redirect` to it. A `router.replace` made from an effect
+ * races the root layout's guard, which resets the stack when the user signs in, and was lost on
+ * Android and, from the layout, on iOS (#98); `Redirect` navigates once its screen has focus.
  */
-export function useReturnToPendingInvite() {
-  const { state } = useSession();
-  const signedIn = state.kind !== "loading" && state.kind !== "clear";
-
-  useEffect(() => {
-    if (!signedIn) {
-      return;
-    }
+export function usePendingInviteHref(): `/invite/${string}` | null {
+  const [href] = useState(() => {
     const token = takePendingInvite();
-    if (token) {
-      router.replace(`/invite/${token}`);
-    }
-  }, [signedIn]);
+    return token ? (`/invite/${token}` as const) : null;
+  });
+  return href;
 }
