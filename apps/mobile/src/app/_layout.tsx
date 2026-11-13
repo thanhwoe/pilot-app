@@ -24,6 +24,7 @@ function RootStack() {
     <Stack screenOptions={{ title: "Góp" }}>
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="groups/[id]" />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" options={{ title: copy.emailHeading }} />

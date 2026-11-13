@@ -145,6 +145,27 @@ export function describeAuthStoreContract(name: string, open: () => Promise<Stor
       expect(await store.findSessionUser("unknown", at(2 * minute))).toBeNull();
     });
 
+    it("finds users by id, in any order, and leaves out an id nobody has", async () => {
+      const emails = [nextEmail(), nextEmail()];
+      const users = [];
+      for (const email of emails) {
+        await saveCode(email, `by-id-${email}`);
+        const user = await signIn(email, `by-id-${email}`);
+        users.push(user);
+      }
+      const [first, second] = users;
+      const unknownId = "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f";
+
+      const found = await store.findUsersByIds([second?.id ?? "", unknownId, first?.id ?? ""]);
+
+      expect(found).toHaveLength(2);
+      expect(found).toEqual(expect.arrayContaining([first, second]));
+    });
+
+    it("finds no users for no ids", async () => {
+      expect(await store.findUsersByIds([])).toEqual([]);
+    });
+
     it("deletes a session", async () => {
       const email = nextEmail();
       await saveCode(email, "d");

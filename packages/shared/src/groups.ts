@@ -21,10 +21,28 @@ export const groupSchema = z.object({
 
 export type Group = z.infer<typeof groupSchema>;
 
-/** Response of `POST /groups` (201) and `GET /groups/:id`. */
+/** Response of `POST /groups` (201). */
 export const groupResponseSchema = groupSchema;
 
 export type GroupResponse = z.infer<typeof groupResponseSchema>;
+
+/** A member as the group's own screen shows them: there are no display names, so the email. */
+export const groupMemberSchema = z.object({
+  userId: z.uuid(),
+  email: z.string(),
+});
+
+export type GroupMember = z.infer<typeof groupMemberSchema>;
+
+/**
+ * Response of `GET /groups/:id` (#97): the group and its members in the order they joined, so a
+ * screen can name a payer and split between everyone. A group always has its creator.
+ */
+export const groupDetailResponseSchema = groupSchema.extend({
+  members: z.array(groupMemberSchema).min(1),
+});
+
+export type GroupDetailResponse = z.infer<typeof groupDetailResponseSchema>;
 
 /** A group in the caller's list: the group, and whether it has an invite link (#94). */
 export const groupListItemSchema = groupSchema.extend({

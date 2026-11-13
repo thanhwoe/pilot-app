@@ -1,12 +1,19 @@
 import {
+  createExpenseBodySchema,
+  EXPENSE_AMOUNT_MAX,
+  EXPENSE_AMOUNT_MIN,
+  type Expense,
+} from "../expenses";
+import {
   createGroupBodySchema,
   type Group,
+  type GroupDetailResponse,
   type GroupListItem,
   inviteTokenSchema,
 } from "../groups";
 import { guardSession } from "../session-guard";
 import type { GroupsApi } from "./api";
-import { groupsCopy as copy } from "./copy";
+import { groupsCopy as copy, expensesCopy } from "./copy";
 
 /** What the groups list shows. `signed-out`: the API rejected the session, so the app shows sign-in. */
 export type GroupsState =
@@ -161,4 +168,100 @@ export async function acceptInvite(
     return { kind: "signed-out" };
   }
   return result.error === "not_found" ? { kind: "bad-link" } : { kind: "unavailable" };
+}
+
+/**
+ * What a group's screen shows (#97). `signed-out`: the API rejected the session, so the app shows
+ * sign-in instead of an error.
+ */
+export type GroupScreenState =
+  | { kind: "loaded"; group: GroupDetailResponse; expenses: Expense[] }
+  | { kind: "unavailable" }
+  | { kind: "signed-out" };
+
+/** The screen's load answered that the API rejected the session. */
+export function isScreenSignedOut(state: GroupScreenState): state is { kind: "signed-out" } {
+  return state.kind === "signed-out";
+}
+
+/**
+ * The group, its members and its expenses. Both calls are made, and a session the API rejects on
+ * either means signed out; any other failure shows the connection error and keeps the session.
+ */
+export async function loadGroupScreen(
+  api: GroupsApi,
+  token: string,
+  groupId: string,
+): Promise<GroupScreenState> {
+  const [group, expenses] = await Promise.all([
+    api.getGroup(token, groupId),
+    api.listExpenses(token, groupId),
+  ]);
+  const guardedGroup = guardSession(group);
+  const guardedExpenses = guardSession(expenses);
+  if (guardedGroup.kind === "signed-out" || guardedExpenses.kind === "signed-out") {
+    return { kind: "signed-out" };
+  }
+  if (guardedGroup.kind === "ok" && guardedExpenses.kind === "ok") {
+    return { kind: "loaded", group: guardedGroup.data, expenses: guardedExpenses.data.expenses };
+  }
+  return { kind: "unavailable" };
+}
+
+/** `signedOut`: the API rejected the session, so the app shows sign-in instead of an error. */
+export type SaveExpenseOutcome =
+  | { saved: true; expense: Expense }
+  | { saved: false; error: string }
+  | { saved: false; signedOut: true };
+
+/** Saving answered that the API rejected the session. */
+export function isSaveExpenseSignedOut(
+  outcome: SaveExpenseOutcome,
+): outcome is { saved: false; signedOut: true } {
+  return "signedOut" in outcome;
+}
+
+/**
+ * The add-expense form: checks the amount and the description, then saves an expense paid by me
+ * and split equally between `memberIds`. The amount comes from the field as a whole number.
+ */
+export async function submitExpense(
+  api: GroupsApi,
+  token: string,
+  values: {
+    groupId: string;
+    myId: string;
+    memberIds: string[];
+    amount: number;
+    description: string;
+  },
+): Promise<SaveExpenseOutcome> {
+  if (values.amount < EXPENSE_AMOUNT_MIN) {
+    return { saved: false, error: expensesCopy.amountRequired };
+  }
+  if (values.amount > EXPENSE_AMOUNT_MAX) {
+    return { saved: false, error: expensesCopy.amountTooLarge };
+  }
+  if (values.description.trim() === "") {
+    return { saved: false, error: expensesCopy.descriptionRequired };
+  }
+  const body = createExpenseBodySchema.safeParse({
+    payerId: values.myId,
+    amount: values.amount,
+    description: values.description,
+    splitBetween: values.memberIds,
+  });
+  // The field takes at most 200 characters, so only a form that was not built by the screen gets
+  // here: there is nothing the person can fix, so it is the same error as a failed request.
+  if (!body.success) {
+    return { saved: false, error: expensesCopy.unavailable };
+  }
+  const result = guardSession(await api.createExpense(token, values.groupId, body.data));
+  if (result.kind === "signed-out") {
+    return { saved: false, signedOut: true };
+  }
+  if (result.kind === "failed") {
+    return { saved: false, error: expensesCopy.unavailable };
+  }
+  return { saved: true, expense: result.data };
 }

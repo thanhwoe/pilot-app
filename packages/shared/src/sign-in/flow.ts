@@ -8,7 +8,9 @@ export type SignInState =
   | { step: "email"; email?: string; error?: string }
   | { step: "code"; email: string; error?: string };
 
-export type CodeOutcome = SignInState | { signedIn: true; token: string; email: string };
+export type CodeOutcome =
+  | SignInState
+  | { signedIn: true; token: string; email: string; userId: string };
 
 const emailStepError: Partial<Record<ApiError, string>> = {
   invalid_request: copy.invalidEmail,
@@ -63,7 +65,12 @@ export async function submitCode(
       error: codeStepError[result.error] ?? copy.unavailable,
     };
   }
-  return { signedIn: true, token: result.data.token, email: result.data.user.email };
+  return {
+    signedIn: true,
+    token: result.data.token,
+    email: result.data.user.email,
+    userId: result.data.user.id,
+  };
 }
 
 /**
@@ -93,7 +100,7 @@ export function changeEmail(email: string): SignInState {
 }
 
 export type AccountState =
-  | { kind: "signed-in"; email: string }
+  | { kind: "signed-in"; email: string; userId: string }
   | { kind: "unavailable" }
   | { kind: "clear" };
 
@@ -111,6 +118,6 @@ export function accountState(me: ApiResult<MeResponse> | null): AccountState {
     return { kind: "clear" };
   }
   return result.kind === "ok"
-    ? { kind: "signed-in", email: result.data.email }
+    ? { kind: "signed-in", email: result.data.email, userId: result.data.id }
     : { kind: "unavailable" };
 }

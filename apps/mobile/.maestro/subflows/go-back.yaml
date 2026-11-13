@@ -1,0 +1,14 @@
+# Back to the screen before: the system back on Android, the header's back button on iOS.
+appId: com.thanhwoe.gop
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: 10%,9%

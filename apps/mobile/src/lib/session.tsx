@@ -34,7 +34,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   async function signIn(values: { email: string; code: string }) {
     const outcome = await completeSignIn(authApi, store, values);
     if ("signedIn" in outcome) {
-      setState({ kind: "signed-in", email: outcome.email });
+      setState({ kind: "signed-in", email: outcome.email, userId: outcome.userId });
       return { signedIn: true as const };
     }
     return outcome;
