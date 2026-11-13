@@ -7,11 +7,20 @@ import {
   postJson,
 } from "../api-client";
 import {
+  type CreateExpenseBody,
+  type ExpenseListResponse,
+  type ExpenseResponse,
+  expenseListResponseSchema,
+  expenseResponseSchema,
+} from "../expenses";
+import {
   type CreateGroupBody,
   type CreateInviteResponse,
   createInviteResponseSchema,
+  type GroupDetailResponse,
   type GroupListResponse,
   type GroupResponse,
+  groupDetailResponseSchema,
   groupListResponseSchema,
   groupResponseSchema,
   type InvitePreviewResponse,
@@ -33,6 +42,16 @@ export interface GroupsApi {
   previewInvite(token: string, inviteToken: string): Promise<ApiResult<InvitePreviewResponse>>;
   /** Joins the group an invite leads to. Joining as a member changes nothing. */
   joinWithInvite(token: string, inviteToken: string): Promise<ApiResult<GroupResponse>>;
+  /** One group with its members (#97). `not_found` for a group I am not in, whatever the reason. */
+  getGroup(token: string, groupId: string): Promise<ApiResult<GroupDetailResponse>>;
+  /** The group's expenses, newest first (#97). */
+  listExpenses(token: string, groupId: string): Promise<ApiResult<ExpenseListResponse>>;
+  /** Records an expense, split equally between the members in the body (#97). */
+  createExpense(
+    token: string,
+    groupId: string,
+    body: CreateExpenseBody,
+  ): Promise<ApiResult<ExpenseResponse>>;
 }
 
 /** `baseUrl` comes from each app, as for `createAuthApi`. */
@@ -71,6 +90,24 @@ export function createGroupsApi(
         "/invites/join",
         withBearer(postJson({ token: inviteToken }), token),
         groupResponseSchema,
+      ),
+    getGroup: (token, groupId) =>
+      call(
+        `/groups/${encodeURIComponent(groupId)}`,
+        { headers: bearer(token) },
+        groupDetailResponseSchema,
+      ),
+    listExpenses: (token, groupId) =>
+      call(
+        `/groups/${encodeURIComponent(groupId)}/expenses`,
+        { headers: bearer(token) },
+        expenseListResponseSchema,
+      ),
+    createExpense: (token, groupId, body) =>
+      call(
+        `/groups/${encodeURIComponent(groupId)}/expenses`,
+        withBearer(postJson(body), token),
+        expenseResponseSchema,
       ),
   };
 }
