@@ -1,0 +1,45 @@
+# #97 AC 2: expenses added through the API show newest first, each with its amount and payer
+# line. The script adds a second member to the group, then "An toi" paid by that member and
+# "Taxi" paid by me. Order is checked with `below`: Maestro applies `index` after matching text.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runFlow: subflows/create-group.yaml
+# The script reads the group from the API, so wait until the app has created it.
+- assertVisible:
+    id: group-name
+    text: Da Lat
+- runScript: scripts/other-member-expense.js
+- tapOn:
+    id: group-row
+- assertVisible:
+    id: group-title
+    text: Da Lat
+- assertVisible:
+    id: expense-description
+    text: Taxi
+- assertVisible:
+    id: expense-amount
+    text: 50.000 ₫
+- assertVisible:
+    id: expense-payer
+    text: Bạn đã trả
+- assertVisible:
+    id: expense-description
+    text: An toi
+    below:
+      id: expense-description
+      text: Taxi
+- assertVisible:
+    id: expense-amount
+    text: 90.000 ₫
+- assertVisible:
+    id: expense-payer
+    text: ${output.otherEmail} đã trả
+- assertNotVisible:
+    id: expenses-empty
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-expense-list

@@ -28,3 +28,22 @@ export const invitesCopy = {
   /** One message for every link that doesn't work, so it says nothing about why. */
   badLink: "Liên kết mời này không dùng được. Hãy xin người mời bạn một liên kết mới.",
 } as const;
+
+/** The expense UI text for the mobile app (#97). Tests check these exact strings. */
+export const expensesCopy = {
+  add: "Thêm chi tiêu",
+  amountLabel: "Số tiền",
+  descriptionLabel: "Mô tả",
+  save: "Lưu",
+  empty: "Nhóm này chưa có chi tiêu nào.",
+  loading: "Đang tải chi tiêu…",
+  paidByMe: "Bạn đã trả",
+  paidBy: (email: string) => `${email} đã trả`,
+  /** For a payer who is not among the members, so the line still says something true. */
+  paidByMember: "Một thành viên đã trả",
+  amountRequired: "Hãy nhập số tiền.",
+  amountTooLarge: "Số tiền tối đa là 100.000.000 ₫.",
+  descriptionRequired: "Hãy nhập mô tả.",
+  unavailable: groupsCopy.unavailable,
+  retry: groupsCopy.retry,
+} as const;

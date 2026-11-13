@@ -60,6 +60,7 @@ describe("submitCode", () => {
       signedIn: true,
       token: "t0ken",
       email: user.email,
+      userId: user.id,
     });
     expect(api.signIn).toHaveBeenCalledWith({ email: "an@example.com", code: "123456" });
   });
@@ -156,6 +157,7 @@ describe("accountState", () => {
     expect(accountState({ ok: true, data: user })).toEqual({
       kind: "signed-in",
       email: user.email,
+      userId: user.id,
     });
   });
 

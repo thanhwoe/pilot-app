@@ -1,0 +1,67 @@
+# #97 AC 2, 4, 5: adds "An toi" for 90.000 to a group with no expenses and then "Taxi" for 50.000.
+# The amount field shows thousands separators as it is typed; the form closes after each save and
+# the new row is at the top. Descriptions are ASCII because Maestro can't type other text on
+# Android. Order is checked with `below`: Maestro applies `index` after matching text.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runFlow: subflows/create-group.yaml
+- tapOn:
+    id: group-row
+- assertVisible:
+    id: expenses-empty
+- tapOn:
+    id: add-expense
+- tapOn:
+    id: expense-amount-input
+- inputText: "90000"
+- assertVisible:
+    id: expense-amount-input
+    text: "90.000"
+- tapOn:
+    id: expense-description-input
+- inputText: An toi
+- hideKeyboard
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-add-form
+- tapOn:
+    id: save-expense
+- assertNotVisible:
+    id: expense-amount-input
+- assertNotVisible:
+    id: expenses-empty
+- assertVisible:
+    id: expense-description
+    text: An toi
+- assertVisible:
+    id: expense-amount
+    text: 90.000 ₫
+- assertVisible:
+    id: expense-payer
+    text: Bạn đã trả
+- tapOn:
+    id: add-expense
+- tapOn:
+    id: expense-amount-input
+- inputText: "50000"
+- tapOn:
+    id: expense-description-input
+- inputText: Taxi
+- hideKeyboard
+- tapOn:
+    id: save-expense
+- assertNotVisible:
+    id: expense-amount-input
+- assertVisible:
+    id: expense-description
+    text: Taxi
+- assertVisible:
+    id: expense-description
+    text: An toi
+    below:
+      id: expense-description
+      text: Taxi
+- takeScreenshot: ${output.platform}-two-expenses

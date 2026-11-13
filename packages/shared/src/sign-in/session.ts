@@ -17,13 +17,13 @@ export async function completeSignIn(
   api: AuthApi,
   store: SessionStore,
   values: { email: string; code: string },
-): Promise<SignInState | { signedIn: true; email: string }> {
+): Promise<SignInState | { signedIn: true; email: string; userId: string }> {
   const outcome = await submitCode(api, values);
   if (!("signedIn" in outcome)) {
     return outcome;
   }
   await store.set(outcome.token);
-  return { signedIn: true, email: outcome.email };
+  return { signedIn: true, email: outcome.email, userId: outcome.userId };
 }
 
 /**

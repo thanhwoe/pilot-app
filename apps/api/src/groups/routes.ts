@@ -2,6 +2,7 @@ import {
   type CreateInviteResponse,
   createGroupBodySchema,
   type ErrorResponse,
+  type GroupDetailResponse,
   type GroupListItem,
   type GroupListResponse,
   type GroupResponse,
@@ -36,7 +37,7 @@ function toListItem(group: StoredGroupListItem): GroupListItem {
 }
 
 export function registerGroupRoutes(app: FastifyInstance, deps: GroupDeps) {
-  const { groupStore, authSecret, now } = deps;
+  const { groupStore, authStore, authSecret, now } = deps;
   const findSession = createSessionCheck(deps);
 
   /**
@@ -86,7 +87,20 @@ export function registerGroupRoutes(app: FastifyInstance, deps: GroupDeps) {
     if (!group) {
       return reply.code(404).send(notFound);
     }
-    return toResponse(group);
+    const memberRows = await groupStore.listMembers(group.id);
+    const users = await authStore.findUsersByIds(memberRows.map((member) => member.userId));
+    const emails = new Map(users.map((user) => [user.id, user.email]));
+    // A member row always has a user. An id with none is an error, not a smaller member list:
+    // the screen splits an expense between every member it is sent.
+    const members = memberRows.map(({ userId }) => {
+      const email = emails.get(userId);
+      if (email === undefined) {
+        throw new Error(`Member ${userId} of group ${group.id} has no user`);
+      }
+      return { userId, email };
+    });
+    const response: GroupDetailResponse = { ...toResponse(group), members };
+    return response;
   });
 
   // Any member can make the link, or replace it: the old one then finds nothing. Only the hash is

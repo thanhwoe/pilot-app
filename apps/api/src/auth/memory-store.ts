@@ -91,5 +91,9 @@ export function createMemoryAuthStore(): AuthStore {
     async deleteSession(tokenHash) {
       return sessions.delete(tokenHash);
     },
+
+    async findUsersByIds(ids) {
+      return [...usersByEmail.values()].filter((user) => ids.includes(user.id));
+    },
   };
 }

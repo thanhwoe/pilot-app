@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   createInviteResponseSchema,
   errorResponseSchema,
+  groupDetailResponseSchema,
   groupListResponseSchema,
   groupResponseSchema,
   invitePreviewResponseSchema,
@@ -220,6 +221,50 @@ describe("GET /groups/:id", () => {
     expect(res.statusCode).toBe(200);
     expect(groupResponseSchema.parse(res.json())).toEqual(created);
   });
+
+  it("#97 AC 10: gives any member the members with their emails, in the order they joined", async () => {
+    const groupStore = createMemoryGroupStore();
+    const { signIn, createGroup, getGroup, userId } = setup(groupStore);
+    const ana = await signIn("ana@example.com");
+    const bao = await signIn("bao@example.com");
+    const chi = await signIn("chi@example.com");
+    const created = groupResponseSchema.parse((await createGroup(ana, { name: "Nhà" })).json());
+    // Chi joins before Bao, so the order is the join time and not the order the users were made.
+    groupStore.addMember(created.id, await userId(chi), new Date("2026-11-02T10:01:00Z"));
+    groupStore.addMember(created.id, await userId(bao), new Date("2026-11-02T10:02:00Z"));
+    const expected = [
+      { userId: await userId(ana), email: "ana@example.com" },
+      { userId: await userId(chi), email: "chi@example.com" },
+      { userId: await userId(bao), email: "bao@example.com" },
+    ];
+
+    for (const token of [ana, chi, bao]) {
+      const res = await getGroup(token, created.id);
+
+      expect(res.statusCode).toBe(200);
+      const detail = groupDetailResponseSchema.parse(res.json());
+      expect(detail.members).toEqual(expected);
+      expect(detail).toMatchObject({ ...created, memberCount: 3 });
+    }
+  });
+
+  it("#97 AC 10: orders members who joined at the same time by user id", async () => {
+    const groupStore = createMemoryGroupStore();
+    const { signIn, createGroup, getGroup, userId } = setup(groupStore);
+    const ana = await signIn("ana@example.com");
+    const bao = await signIn("bao@example.com");
+    const chi = await signIn("chi@example.com");
+    const created = groupResponseSchema.parse((await createGroup(ana, { name: "Nhà" })).json());
+    const joined = new Date("2026-11-02T10:05:00Z");
+    groupStore.addMember(created.id, await userId(bao), joined);
+    groupStore.addMember(created.id, await userId(chi), joined);
+
+    const detail = groupDetailResponseSchema.parse((await getGroup(ana, created.id)).json());
+
+    const tied = detail.members.slice(1).map((member) => member.userId);
+    expect(tied).toEqual([...tied].sort());
+    expect(tied).toHaveLength(2);
+  });
 });
 
 describe("[security] group access", () => {
@@ -245,6 +290,44 @@ describe("[security] group access", () => {
     expect(errorResponseSchema.parse(theirs.json())).toEqual({ error: "not_found" });
     expect(unknown.statusCode).toBe(theirs.statusCode);
     expect(unknown.body).toBe(theirs.body);
+  });
+
+  it("[security] #97 AC 11: a non-member, an unknown id and a malformed id get the same answer, with no email", async () => {
+    const { signIn, createGroup, getGroup } = setup();
+    const ana = await signIn("ana@example.com");
+    const bao = await signIn("bao@example.com");
+    const baos = groupResponseSchema.parse((await createGroup(bao, { name: "Bao's" })).json());
+
+    const answers = [
+      await getGroup(ana, baos.id),
+      await getGroup(ana, randomUUID()),
+      await getGroup(ana, "not-a-uuid"),
+    ];
+
+    for (const res of answers) {
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toBe(answers[0]?.body);
+      expect(res.body).not.toContain("@");
+      expect(res.body).not.toContain("members");
+    }
+  });
+
+  it("[security] #97 AC 11: a member sees the emails of that group's members and no one else's", async () => {
+    const { signIn, createGroup, getGroup, userId } = setup();
+    const ana = await signIn("ana@example.com");
+    const bao = await signIn("bao@example.com");
+    const chi = await signIn("chi@example.com");
+    const anas = groupResponseSchema.parse((await createGroup(ana, { name: "Nhà" })).json());
+    await createGroup(bao, { name: "Bao's" });
+    await createGroup(chi, { name: "Chi's" });
+
+    const res = await getGroup(ana, anas.id);
+
+    expect(groupDetailResponseSchema.parse(res.json()).members).toEqual([
+      { userId: await userId(ana), email: "ana@example.com" },
+    ]);
+    expect(res.body).not.toContain("bao@example.com");
+    expect(res.body).not.toContain("chi@example.com");
   });
 
   it("AC 10: answers 404 not_found for an id that is not a group id", async () => {

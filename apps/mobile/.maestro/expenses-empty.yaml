@@ -1,0 +1,31 @@
+# #97 AC 1, 3, A1: tapping a group opens its screen with its name and, with no expenses, the
+# empty state and the add button; going back returns to the groups list. On iOS the way back is
+# the header's back button; Android's is the system back.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runFlow: subflows/create-group.yaml
+- tapOn:
+    id: group-row
+- assertVisible:
+    id: group-title
+    text: Da Lat
+- assertVisible:
+    id: expenses-empty
+    text: Nhóm này chưa có chi tiêu nào.
+- assertVisible:
+    id: add-expense
+    text: Thêm chi tiêu
+- assertNotVisible:
+    id: expense-row
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-group-empty
+- runFlow: subflows/go-back.yaml
+- assertVisible:
+    id: group-name
+    text: Da Lat
+- assertVisible:
+    id: groups-heading

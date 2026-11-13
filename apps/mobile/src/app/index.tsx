@@ -7,6 +7,7 @@ import {
   isCreateSignedOut,
   isListSignedOut,
 } from "@gop/shared";
+import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
@@ -184,14 +185,19 @@ function Groups() {
       )}
       {groups?.kind === "loaded" &&
         groups.groups.map((group) => (
-          <View key={group.id} style={styles.group}>
+          <Pressable
+            key={group.id}
+            testID="group-row"
+            style={styles.group}
+            onPress={() => router.push({ pathname: "/groups/[id]", params: { id: group.id } })}
+          >
             <Text testID="group-name" style={styles.groupName}>
               {group.name}
             </Text>
             <Text testID="group-member-count" style={styles.members}>
               {groupsCopy.memberCount(group.memberCount)}
             </Text>
-          </View>
+          </Pressable>
         ))}
     </View>
   );
