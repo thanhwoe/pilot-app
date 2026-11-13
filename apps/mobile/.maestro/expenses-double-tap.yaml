@@ -1,0 +1,36 @@
+# #97 AC 8: double-tapping "Lưu" lists exactly one expense. This checks the screen, not the
+# `inFlight` guard in group-screen.tsx: Maestro taps too slowly to beat the re-render that
+# disables the button, so this flow passes with the guard removed. The guard's own test is in
+# src/group-screen.test.tsx. The group starts with no expenses, so a second `expense-row` (index 1)
+# can only be a duplicate.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Hoi An'}
+- runFlow: subflows/create-group.yaml
+- tapOn:
+    id: group-row
+- assertVisible:
+    id: expenses-empty
+- tapOn:
+    id: add-expense
+- tapOn:
+    id: expense-amount-input
+- inputText: "70000"
+- tapOn:
+    id: expense-description-input
+- inputText: Ve xe
+- hideKeyboard
+- doubleTapOn:
+    id: save-expense
+- assertVisible:
+    id: expense-description
+    text: Ve xe
+- assertNotVisible:
+    id: expense-description
+    index: 1
+- assertNotVisible:
+    id: expense-row
+    index: 1
