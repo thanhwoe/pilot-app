@@ -6,7 +6,7 @@ import {
   isSessionValid,
   type User,
 } from "@gop/shared";
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { sessions, signInCodes, users } from "../db/schema";
 import { hashesMatch } from "./secrets";
@@ -43,6 +43,8 @@ export interface AuthStore {
   findSessionUser(tokenHash: string, now: Date): Promise<User | null>;
   /** Returns false when there was no such session. */
   deleteSession(tokenHash: string): Promise<boolean>;
+  /** The users with these ids, in no particular order; an id nobody has is left out. */
+  findUsersByIds(ids: string[]): Promise<User[]>;
 }
 
 /** `now`, or 1 ms after the previous code when that isn't earlier, so codes never share a time. */
@@ -146,6 +148,16 @@ export function createPostgresAuthStore(db: Database["db"]): AuthStore {
         .where(eq(sessions.tokenHash, tokenHash))
         .returning({ id: sessions.id });
       return deleted.length > 0;
+    },
+
+    async findUsersByIds(ids) {
+      if (ids.length === 0) {
+        return [];
+      }
+      return db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(inArray(users.id, ids));
     },
   };
 }
