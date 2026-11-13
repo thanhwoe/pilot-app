@@ -1,5 +1,6 @@
 import { groupsCopy } from "@gop/shared";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable } from "react-native";
 import Home from "@/app/index";
@@ -473,4 +474,20 @@ test("[security] a create whose reload answers 401 stays busy until the token is
   } finally {
     holdDelete.mockRestore();
   }
+});
+
+// #97 AC 1: a group's row opens that group's screen.
+test("tapping a group's row opens that group's screen", async () => {
+  const push = jest.spyOn(router, "push").mockImplementation(() => {});
+  const first = group("Nha", "2026-11-01T00:00:00.000Z");
+  const second = group("Da Lat", "2026-11-02T00:00:00.000Z");
+  listGroups.mockResolvedValue({ ok: true, data: { groups: [second, first] } });
+
+  await renderApp();
+  await screen.findByText("Nha");
+  const rows = screen.getAllByTestId("group-row");
+  await fireEvent.press(rows[1] as (typeof rows)[number]);
+
+  expect(push).toHaveBeenCalledTimes(1);
+  expect(push).toHaveBeenCalledWith({ pathname: "/groups/[id]", params: { id: first.id } });
 });
