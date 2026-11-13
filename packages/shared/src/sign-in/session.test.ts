@@ -51,7 +51,7 @@ describe("completeSignIn", () => {
       code: "123456",
     });
 
-    expect(outcome).toEqual({ signedIn: true, email: user.email });
+    expect(outcome).toEqual({ signedIn: true, email: user.email, userId: user.id });
     expect(JSON.stringify(outcome)).not.toContain("t0ken");
     expect(store.set).toHaveBeenCalledExactlyOnceWith("t0ken");
   });
@@ -99,6 +99,7 @@ describe("restoreSession", () => {
     expect(await restoreSession(api, fakeStore("t0ken"))).toEqual({
       kind: "signed-in",
       email: user.email,
+      userId: user.id,
     });
     expect(api.me).toHaveBeenCalledWith("t0ken");
   });
