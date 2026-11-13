@@ -1,0 +1,18 @@
+# #98 AC 1: a link that starts the app from nothing reaches the invite, while the session is still
+# being restored. The app is signed in and then stopped, so opening the link is a cold start.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runScript: scripts/invite-link.js
+- stopApp
+- runFlow: subflows/open-invite.yaml
+- assertVisible:
+    id: invite-heading
+    text: .*Da Lat.*
+- assertVisible:
+    id: invite-join
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-invite-cold-start
