@@ -9,14 +9,13 @@ import { useState } from "react";
 let pending: string | null = null;
 
 /**
- * Keeps the token if it could be an invite's, and says whether it did. A token of the wrong shape
- * is not kept, so after sign-in the app shows the groups list, as the web does.
+ * Keeps the token if it could be an invite's, and says whether it did. The latest link wins: a
+ * token of the wrong shape is not kept and clears an earlier one, so after sign-in the app shows
+ * the groups list, as the web does.
  */
 export function setPendingInvite(token: unknown): boolean {
   const parsed = inviteTokenSchema.safeParse(token);
-  if (parsed.success) {
-    pending = parsed.data;
-  }
+  pending = parsed.success ? parsed.data : null;
   return parsed.success;
 }
 

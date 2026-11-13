@@ -36,11 +36,11 @@ describe("setPendingInvite", () => {
     expect(takePendingInvite()).toBeNull();
   });
 
-  test("a refused token does not replace one that was kept", () => {
+  test("a refused token clears the one that was kept, so the latest link wins", () => {
     setPendingInvite(token);
     setPendingInvite("short");
 
-    expect(takePendingInvite()).toBe(token);
+    expect(takePendingInvite()).toBeNull();
   });
 });
 

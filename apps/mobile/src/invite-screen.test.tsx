@@ -91,6 +91,59 @@ beforeEach(async () => {
 });
 
 describe("a signed-in visitor", () => {
+  // Expo Router updates the params of an open screen instead of mounting a new one, so a second
+  // link must not leave the first group's heading and join button on screen.
+  test("opening another link while the screen is open shows the new group, and joins it", async () => {
+    const other = "D".repeat(43);
+    const held = deferred<PreviewAnswer>();
+    const view = await render(
+      <SessionProvider>
+        <Screens link={token} />
+      </SessionProvider>,
+    );
+    await screen.findByTestId("invite-heading");
+    previewInvite.mockReturnValue(held.promise);
+
+    await view.rerender(
+      <SessionProvider>
+        <Screens link={other} />
+      </SessionProvider>,
+    );
+
+    expect(screen.queryByTestId("invite-heading")).toBeNull();
+    expect(screen.queryByTestId("invite-join")).toBeNull();
+    expect(screen.getByTestId("invite-loading")).toBeTruthy();
+
+    held.resolve({ ok: true, data: { groupName: "Nha Trang", alreadyMember: false } });
+    expect(await screen.findByTestId("invite-heading")).toHaveTextContent(
+      invitesCopy.heading("Nha Trang"),
+    );
+    await fireEvent.press(screen.getByTestId("invite-join"));
+    await settle();
+    expect(joinWithInvite).toHaveBeenCalledWith("old-token", other);
+  });
+
+  test("an error from the first link does not stay on screen for the next", async () => {
+    joinWithInvite.mockResolvedValue({ ok: false, error: "unavailable" });
+    const view = await render(
+      <SessionProvider>
+        <Screens link={token} />
+      </SessionProvider>,
+    );
+    await screen.findByTestId("invite-join");
+    await fireEvent.press(screen.getByTestId("invite-join"));
+    await screen.findByTestId("invite-error");
+
+    await view.rerender(
+      <SessionProvider>
+        <Screens link={"E".repeat(43)} />
+      </SessionProvider>,
+    );
+    await screen.findByTestId("invite-join");
+
+    expect(screen.queryByTestId("invite-error")).toBeNull();
+  });
+
   // #98 AC 1
   test("sees the group's name and a join button for a good link", async () => {
     await renderScreen();

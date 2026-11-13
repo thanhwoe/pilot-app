@@ -36,6 +36,10 @@ export function InviteScreen({ token }: { token: unknown }) {
       return;
     }
     let current = true;
+    // Expo Router updates the params of an open screen when another link arrives: forget the
+    // first link's group, so its heading and join button never sit above the second link's token.
+    setInvite(null);
+    setJoinFailed(false);
     guard(() => openMyInvite(link), isInviteSignedOut).then((answer) => {
       if (!answer || !current) {
         return;
