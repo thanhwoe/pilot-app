@@ -30,6 +30,7 @@ Reviewers, human or Claude, check each item and cite file and line for every pro
 - [ ] A test that asserts something stayed the same first waits for the event that would have changed it (a frame, a response, a rendered row), so it can't pass before the change had its chance.
 - [ ] A field in a `useActionState` form is controlled (a text field through `ActionTextField`), and a test holds the action open (`holdFirstServerAction`) and types before it ends.
 - [ ] A screen that saves and then reloads has a test for a save the API accepts followed by a reload that fails: it keeps what it showed, offers a retry of the reload, and does not offer the same save again (#97, #107).
+- [ ] A screen opened by a link or a route parameter has a test for a second value arriving while it is open (it replaces what the first one showed) and for a malformed value arriving after a good one (it clears what was remembered) (#98).
 - [ ] Docs and `CLAUDE.md` are updated when behaviour or commands changed.
 
 ## Evidence
