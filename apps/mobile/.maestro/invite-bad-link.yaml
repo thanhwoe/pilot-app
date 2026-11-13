@@ -1,0 +1,28 @@
+# #98 AC 4 [security]: a link with a wrong token or a malformed one shows the same error, has no
+# join button, and joins no one: the groups list is still empty afterwards. A token of the right
+# shape that no group has is 43 "Z"s.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.inviteLink = 'gop://invite/ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ'}
+- runFlow: subflows/open-invite.yaml
+- assertVisible:
+    id: invite-bad-link
+    text: Liên kết mời này không dùng được. Hãy xin người mời bạn một liên kết mới.
+- assertNotVisible:
+    id: invite-join
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-invite-bad-link
+- evalScript: ${output.inviteLink = 'gop://invite/short'}
+- runFlow: subflows/open-invite.yaml
+- assertVisible:
+    id: invite-bad-link
+    text: Liên kết mời này không dùng được. Hãy xin người mời bạn một liên kết mới.
+- assertNotVisible:
+    id: invite-join
+- stopApp
+- launchApp
+- assertVisible:
+    id: groups-empty

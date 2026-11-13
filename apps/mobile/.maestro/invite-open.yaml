@@ -1,0 +1,31 @@
+# #98 AC 1, 2: a signed-in user opens an invite link, sees the group's name and the join button,
+# joins, and the groups list shows the group with 2 members. The group and its link are made
+# through the API by another user, so the app user is not a member yet. Names are ASCII because
+# Maestro can't type other text on Android.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runScript: scripts/invite-link.js
+- runFlow: subflows/open-invite.yaml
+- assertVisible:
+    id: invite-heading
+    text: .*Da Lat.*
+- assertVisible:
+    id: invite-join
+    text: Tham gia nhóm
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-invite-open
+- tapOn:
+    id: invite-join
+- assertVisible:
+    id: group-name
+    text: Da Lat
+- assertVisible:
+    id: group-member-count
+    text: 2 thành viên
+- assertNotVisible:
+    id: invite-heading
+- takeScreenshot: ${output.platform}-invite-joined

@@ -29,6 +29,8 @@ function RootStack() {
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" options={{ title: copy.emailHeading }} />
       </Stack.Protected>
+      {/* Outside both guards: a signed-out visitor must reach it, and the screen decides. */}
+      <Stack.Screen name="invite/[token]" />
     </Stack>
   );
 }

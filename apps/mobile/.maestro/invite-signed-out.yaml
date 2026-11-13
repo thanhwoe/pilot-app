@@ -1,0 +1,43 @@
+# #98 AC 3: opening an invite link signed out leads to sign-in, and after signing in the app is on
+# the invite, not on the groups list. Then joining shows the group in the list.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+# Wait for the app to be up before the link is opened: a link that arrives while the app is still
+# starting is a different case (the cold start, invite-cold-start.yaml), and on Android the fast
+# script here put it inside that window.
+- assertVisible:
+    id: email-input
+- evalScript: ${output.groupName = 'Da Lat'}
+- runScript: scripts/invite-link.js
+- runFlow: subflows/open-invite.yaml
+- assertVisible:
+    id: email-input
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-invite-signed-out
+# The sign-in steps of subflows/sign-in.yaml, without its wait for the groups list: this flow
+# ends on the invite.
+- runFlow: subflows/request-code.yaml
+- assertVisible:
+    id: code-input
+- runScript: scripts/dev-code.js
+- tapOn:
+    id: code-input
+- inputText: ${output.code}
+- tapOn:
+    id: sign-in
+- assertVisible:
+    id: invite-heading
+    text: .*Da Lat.*
+- assertNotVisible:
+    id: groups-heading
+- takeScreenshot: ${output.platform}-invite-after-sign-in
+- tapOn:
+    id: invite-join
+- assertVisible:
+    id: group-name
+    text: Da Lat
+- assertVisible:
+    id: group-member-count
+    text: 2 thành viên

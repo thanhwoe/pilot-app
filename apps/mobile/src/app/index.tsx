@@ -7,11 +7,12 @@ import {
   isCreateSignedOut,
   isListSignedOut,
 } from "@gop/shared";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiUrl, fetchHealth } from "@/lib/api";
 import { createMyGroup, loadMyGroups } from "@/lib/groups";
+import { usePendingInviteHref } from "@/lib/pending-invite";
 import { useSession } from "@/lib/session";
 import { useSessionGuard } from "@/lib/session-guard";
 
@@ -21,12 +22,18 @@ export default function Home() {
   const { state: session, signOut } = useSession();
   const [state, setState] = useState<State>({ kind: "loading" });
   const [signingOut, setSigningOut] = useState(false);
+  // Someone who signed in from an invite link goes back to it.
+  const invite = usePendingInviteHref();
 
   useEffect(() => {
     fetchHealth()
       .then((health) => setState({ kind: "ok", health }))
       .catch(() => setState({ kind: "error" }));
   }, []);
+
+  if (invite) {
+    return <Redirect href={invite} />;
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">

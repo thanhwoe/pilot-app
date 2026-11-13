@@ -1,0 +1,12 @@
+# Opens ${output.inviteLink} on the device. iOS asks once whether to open the app for the "gop"
+# scheme; the answer is "Open", and the step is optional because the question is not always asked.
+appId: com.thanhwoe.gop
+---
+- openLink: ${output.inviteLink}
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: Open
+          optional: true
