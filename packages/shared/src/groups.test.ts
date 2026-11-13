@@ -4,8 +4,10 @@ import {
   createGroupBodySchema,
   createInviteResponseSchema,
   GROUP_NAME_MAX_LENGTH,
+  groupDetailResponseSchema,
   groupListItemSchema,
   groupListResponseSchema,
+  groupMemberSchema,
   groupNameSchema,
   groupResponseSchema,
   invitePreviewResponseSchema,
@@ -130,5 +132,31 @@ describe("invite schemas", () => {
 describe("errorResponseSchema", () => {
   it("accepts not_found (AC 9, 10)", () => {
     expect(errorResponseSchema.parse({ error: "not_found" })).toEqual({ error: "not_found" });
+  });
+});
+
+describe("groupDetailResponseSchema", () => {
+  const member = { userId: "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f", email: "an@example.com" };
+
+  it("parses a group with its members", () => {
+    const detail = { ...group, members: [member] };
+
+    expect(groupDetailResponseSchema.parse(detail)).toEqual(detail);
+  });
+
+  it("rejects an empty member list, because a group always has its creator", () => {
+    expect(groupDetailResponseSchema.safeParse({ ...group, members: [] }).success).toBe(false);
+  });
+
+  it("rejects a response with no members", () => {
+    expect(groupDetailResponseSchema.safeParse(group).success).toBe(false);
+  });
+
+  it("rejects a member without an email", () => {
+    expect(groupMemberSchema.safeParse({ userId: member.userId }).success).toBe(false);
+  });
+
+  it("rejects a member id that is not a uuid", () => {
+    expect(groupMemberSchema.safeParse({ ...member, userId: "an" }).success).toBe(false);
   });
 });
