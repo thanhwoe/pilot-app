@@ -59,11 +59,32 @@ for _ in $(seq 60); do
 done
 curl -sf "$api_url/health" >/dev/null || { echo "The API did not start; see e2e/api.log" >&2; exit 1; }
 
+if [[ "$platform" == ios ]]; then
+  # No `expo run:ios --device <name>`: after installing, it launches the app and asks System
+  # Events whether Simulator.app is running, which needs an Automation permission that a runner
+  # can't answer on screen (#109). The simulator is booted and the app installed with `simctl`.
+  ios_device="${IOS_DEVICE:-iPhone 16}"
+  udid="$(xcrun simctl list devices available -j |
+    IOS_DEVICE="$ios_device" node -e '
+      const { devices } = JSON.parse(require("fs").readFileSync(0, "utf8"));
+      const found = Object.values(devices).flat().find((d) => d.name === process.env.IOS_DEVICE);
+      if (found) console.log(found.udid);
+    ')"
+  [[ -n "$udid" ]] || { echo "No available simulator named \"$ios_device\"" >&2; exit 1; }
+  # "Already booted" is fine; the wait returns once the simulator is ready for the flows.
+  xcrun simctl boot "$udid" 2>/dev/null || true
+  xcrun simctl bootstatus "$udid" -b >/dev/null
+fi
+
 if [[ "$build" == 1 ]]; then
   cd "$mobile_dir"
   export GOP_E2E_BUILD=1 EXPO_PUBLIC_API_URL="http://$api_host:$api_port"
   if [[ "$platform" == ios ]]; then
-    npx expo run:ios --configuration Release --no-bundler --device "${IOS_DEVICE:-iPhone 16}"
+    # `--device generic` builds the simulator app and stops: no install, no launch.
+    app_dir="$mobile_dir/ios/e2e-app"
+    rm -rf "$app_dir"
+    npx expo run:ios --configuration Release --no-bundler --device generic --output "$app_dir"
+    xcrun simctl install "$udid" "$app_dir"/*.app
   else
     npx expo run:android --variant release --no-bundler --device "${ANDROID_DEVICE:-Pixel_9_API_35}"
   fi
