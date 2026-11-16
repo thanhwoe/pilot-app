@@ -656,3 +656,46 @@ describe("#107 a failed reload after a save", () => {
     });
   });
 });
+
+// REVIEW.md: a screen opened by a route parameter has a test for a second value arriving while it
+// is open (#98). The route passes `id` straight in, so a new id can reach a mounted screen.
+describe("a second group id while the screen is open", () => {
+  const other: GroupDetailResponse = { ...detail, id: crypto.randomUUID(), name: "Hue" };
+  const tree = (id: string) => (
+    <SessionProvider>
+      <GroupScreen groupId={id} />
+    </SessionProvider>
+  );
+
+  test("shows the second group once it loads, not the first", async () => {
+    listExpenses.mockResolvedValue(
+      listOf(expense("Taxi", 50000, user.id, "2026-11-12T12:00:00.000Z")),
+    );
+    const view = await render(tree(groupId));
+    await screen.findByTestId("group-title");
+    getGroup.mockResolvedValue({ ok: true, data: other });
+    listExpenses.mockResolvedValue(listOf());
+
+    await view.rerender(tree(other.id));
+
+    await screen.findByTestId("expenses-empty");
+    expect(screen.getByTestId("group-title")).toHaveTextContent("Hue");
+    expect(getGroup).toHaveBeenLastCalledWith("old-token", other.id);
+  });
+
+  test("a failed load of the second group does not keep the first group's title and rows", async () => {
+    listExpenses.mockResolvedValue(
+      listOf(expense("Taxi", 50000, user.id, "2026-11-12T12:00:00.000Z")),
+    );
+    const view = await render(tree(groupId));
+    await screen.findByTestId("group-title");
+    getGroup.mockResolvedValue({ ok: false, error: "unavailable" });
+
+    await view.rerender(tree(other.id));
+    await screen.findByTestId("group-screen-error");
+
+    expect(screen.queryByTestId("group-title")).toBeNull();
+    expect(screen.queryByTestId("expense-row")).toBeNull();
+    expect(screen.queryByTestId("add-expense")).toBeNull();
+  });
+});
