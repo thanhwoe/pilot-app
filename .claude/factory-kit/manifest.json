@@ -1,7 +1,7 @@
 {
   "source": "thanhwoe/solo-factory plugins/factory-kit",
-  "version": "0.28.1",
-  "commit": "ace8313",
+  "version": "0.29.0",
+  "commit": "cd760d1",
   "files": [
     ".claude/skills/factory-build/SKILL.md",
     ".claude/skills/factory-check/SKILL.md",
@@ -28,6 +28,7 @@
     ".claude/factory-kit/scripts/github-pr.mjs",
     ".claude/factory-kit/scripts/gitlab-mr.mjs",
     ".claude/factory-kit/scripts/guard-git.mjs",
+    ".claude/factory-kit/scripts/lint-spec.mjs",
     ".claude/factory-kit/scripts/metrics.mjs",
     ".claude/factory-kit/scripts/options.mjs",
     ".claude/factory-kit/scripts/report-path.mjs"

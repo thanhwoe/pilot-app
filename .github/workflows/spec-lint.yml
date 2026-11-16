@@ -1,0 +1,50 @@
+name: Spec lint
+
+# Runs factory-kit's lint-spec on each spec or plan a push or PR changes, so gates 1 and 2 show a
+# red or green check on the branch (thanhwoe/solo-factory kit #29). It checks only the files that
+# changed: specs written before the linter existed aren't held to it.
+
+on:
+  push:
+    paths: ["docs/specs/**"]
+  pull_request:
+    paths: ["docs/specs/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Lint the changed specs and plans
+        env:
+          BEFORE: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            base=$(git merge-base "origin/$BASE_REF" HEAD)
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            base=$BEFORE
+          else
+            base=$(git merge-base origin/main HEAD)
+          fi
+          numbers=$(git diff --name-only --diff-filter=AM "$base" HEAD -- 'docs/specs/*.md' \
+            | sed -nE 's#^docs/specs/([0-9]+)(-plan)?\.md$#\1#p' | sort -un)
+          if [ -z "$numbers" ]; then
+            echo "No spec or plan changed."
+            exit 0
+          fi
+          status=0
+          for n in $numbers; do
+            node .claude/factory-kit/scripts/lint-spec.mjs "$n" || status=1
+          done
+          exit $status
