@@ -1,5 +1,6 @@
-# #98 AC 1: a link that starts the app from nothing reaches the invite, while the session is still
-# being restored. The app is signed in and then stopped, so opening the link is a cold start.
+# #98 AC 1, #112 AC 1: a link that starts the app from nothing reaches the invite, while the session
+# is still being restored. The app is signed in and then stopped, so opening the link is a cold
+# start. Joining opens the group's own screen, and Back shows the groups list.
 appId: com.thanhwoe.gop
 ---
 - runFlow: subflows/fresh-start.yaml
@@ -16,3 +17,21 @@ appId: com.thanhwoe.gop
     id: invite-join
 - evalScript: ${output.platform = maestro.platform.toLowerCase()}
 - takeScreenshot: ${output.platform}-invite-cold-start
+- tapOn:
+    id: invite-join
+- assertVisible:
+    id: group-screen
+- assertVisible:
+    id: group-title
+    text: Da Lat
+- assertNotVisible:
+    id: invite-heading
+- assertNotVisible:
+    id: groups-heading
+- runFlow: subflows/go-back.yaml
+- assertVisible:
+    id: group-name
+    text: Da Lat
+- assertVisible:
+    id: group-member-count
+    text: 2 thành viên
