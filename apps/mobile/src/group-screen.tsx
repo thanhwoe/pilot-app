@@ -55,6 +55,14 @@ export function GroupScreen({ groupId }: { groupId: string }) {
   }, [guard, groupId]);
 
   useEffect(() => {
+    // `load` changes with the group id: another group must not show the first one's rows when its
+    // own load fails, so start from the loading line.
+    if (shown.current !== null) {
+      shown.current = null;
+      setScreen(null);
+      setReload("idle");
+      setAdding(false);
+    }
     load();
   }, [load]);
 
