@@ -7,6 +7,12 @@ import { setPendingInvite } from "@/lib/pending-invite";
 import { useSession } from "@/lib/session";
 import { useSessionGuard } from "@/lib/session-guard";
 
+/** The groups list, then the group over it, so Back from the group lands on the list. */
+function openGroup(id: string) {
+  router.replace("/");
+  router.push({ pathname: "/groups/[id]", params: { id } });
+}
+
 /**
  * What an invite link opens in the app. `token` is whatever the link carried: the shared flow
  * decides whether it can be an invite's. The route is outside both session guards, so this screen
@@ -40,13 +46,21 @@ export function InviteScreen({ token }: { token: unknown }) {
     // first link's group, so its heading and join button never sit above the second link's token.
     setInvite(null);
     setJoinFailed(false);
-    guard(() => openMyInvite(link), isInviteSignedOut).then((answer) => {
+    guard(() => openMyInvite(link), isInviteSignedOut).then(async (answer) => {
       if (!answer || !current) {
         return;
       }
       if (answer.kind === "invite" && answer.alreadyMember) {
-        // Already a member: nothing to join, and nothing changes.
-        router.replace("/");
+        // Already a member: joining changes nothing, and gives the group id the preview lacks.
+        const outcome = await guard(() => joinMyInvite(link), isInviteSignedOut);
+        if (!outcome || !current) {
+          return;
+        }
+        if (outcome.kind === "joined") {
+          openGroup(outcome.group.id);
+        } else {
+          setInvite(outcome.kind === "bad-link" ? outcome : { kind: "unavailable" });
+        }
         return;
       }
       setInvite(answer);
@@ -68,7 +82,7 @@ export function InviteScreen({ token }: { token: unknown }) {
         return;
       }
       if (outcome.kind === "joined") {
-        router.replace("/");
+        openGroup(outcome.group.id);
       } else if (outcome.kind === "bad-link") {
         setInvite({ kind: "bad-link" });
       } else {

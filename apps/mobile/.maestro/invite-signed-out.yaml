@@ -1,5 +1,6 @@
-# #98 AC 3: opening an invite link signed out leads to sign-in, and after signing in the app is on
-# the invite, not on the groups list. Then joining shows the group in the list.
+# #98 AC 3, #112 AC 1: opening an invite link signed out leads to sign-in, and after signing in the
+# app is on the invite, not on the groups list. Then joining opens the group's own screen, and Back
+# shows the group in the list.
 appId: com.thanhwoe.gop
 ---
 - runFlow: subflows/fresh-start.yaml
@@ -35,6 +36,17 @@ appId: com.thanhwoe.gop
 - takeScreenshot: ${output.platform}-invite-after-sign-in
 - tapOn:
     id: invite-join
+- assertVisible:
+    id: group-screen
+- assertVisible:
+    id: group-title
+    text: Da Lat
+- assertNotVisible:
+    id: invite-heading
+- assertNotVisible:
+    id: groups-heading
+- takeScreenshot: ${output.platform}-invite-joined-after-sign-in
+- runFlow: subflows/go-back.yaml
 - assertVisible:
     id: group-name
     text: Da Lat

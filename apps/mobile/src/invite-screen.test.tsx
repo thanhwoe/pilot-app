@@ -79,11 +79,15 @@ async function pressTwiceWithoutWaiting(testID: string) {
 }
 
 let replace: jest.SpyInstance;
+let push: jest.SpyInstance;
+
+const groupHref = { pathname: "/groups/[id]", params: { id: group.id } };
 
 beforeEach(async () => {
   jest.resetAllMocks();
   takePendingInvite();
   replace = jest.spyOn(router, "replace").mockImplementation(() => {});
+  push = jest.spyOn(router, "push").mockImplementation(() => {});
   me.mockResolvedValue({ ok: true, data: user });
   previewInvite.mockResolvedValue(previewOk());
   joinWithInvite.mockResolvedValue({ ok: true, data: group });
@@ -169,8 +173,8 @@ describe("a signed-in visitor", () => {
     expect(screen.queryByTestId("invite-loading")).toBeNull();
   });
 
-  // #98 AC 2
-  test("joins with the link's token and then goes to the groups list", async () => {
+  // #112 AC 1: the groups list goes under the group's screen, so Back always lands on the list.
+  test("#112 AC 1: joining goes to the group's screen with the id from the join answer, over the groups list", async () => {
     await renderScreen();
     await screen.findByTestId("invite-join");
 
@@ -179,7 +183,22 @@ describe("a signed-in visitor", () => {
 
     expect(joinWithInvite).toHaveBeenCalledTimes(1);
     expect(joinWithInvite).toHaveBeenCalledWith("old-token", token);
+    expect(replace).toHaveBeenCalledTimes(1);
     expect(replace).toHaveBeenCalledWith("/");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(groupHref);
+    expect(replace.mock.invocationCallOrder[0]).toBeLessThan(push.mock.invocationCallOrder[0]);
+  });
+
+  // Guards the rule that the screen joins by itself only for a member.
+  test("#112 AC 1: opening a link joins nothing until join is pressed", async () => {
+    await renderScreen();
+    await screen.findByTestId("invite-join");
+    await settle();
+
+    expect(joinWithInvite).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   test("the join button is disabled while the request runs", async () => {
@@ -214,16 +233,43 @@ describe("a signed-in visitor", () => {
     expect(joinWithInvite).toHaveBeenCalledTimes(1);
   });
 
-  // #98 A3: a member lands on the groups list and nothing changes.
-  test("a member goes to the groups list with no join button and no join call", async () => {
+  // #98 A3, #112 AC 2: a member's own join changes nothing, and gives the id the preview lacks.
+  test("#112 AC 2: a member's join answer gives the group id, and the screen goes to that group", async () => {
     previewInvite.mockResolvedValue(previewOk(true));
 
     await renderScreen();
     await settle();
 
+    expect(joinWithInvite).toHaveBeenCalledTimes(1);
+    expect(joinWithInvite).toHaveBeenCalledWith("old-token", token);
     expect(replace).toHaveBeenCalledWith("/");
+    expect(push).toHaveBeenCalledWith(groupHref);
     expect(screen.queryByTestId("invite-join")).toBeNull();
-    expect(joinWithInvite).not.toHaveBeenCalled();
+  });
+
+  test("#112 A2: a member's join that fails shows the connection error, opens no group and keeps the token", async () => {
+    previewInvite.mockResolvedValue(previewOk(true));
+    joinWithInvite.mockResolvedValue({ ok: false, error: "unavailable" });
+
+    await renderScreen();
+
+    expect(await screen.findByTestId("invite-error")).toHaveTextContent(groupsCopy.unavailable);
+    expect(screen.queryByTestId("invite-join")).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(await secureSessionStore.get()).toBe("old-token");
+  });
+
+  test("#112 A2: a member's join that answers 404 shows the bad-link text and opens no group", async () => {
+    previewInvite.mockResolvedValue(previewOk(true));
+    joinWithInvite.mockResolvedValue({ ok: false, error: "not_found" });
+
+    await renderScreen();
+
+    expect(await screen.findByTestId("invite-bad-link")).toHaveTextContent(invitesCopy.badLink);
+    expect(screen.queryByTestId("invite-join")).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   test("a join that fails with another error shows the connection error, keeps the button and the token", async () => {
@@ -348,7 +394,88 @@ describe("[security] a rejected session", () => {
     await settle();
 
     expect(await secureSessionStore.get()).toBeNull();
+    // The ended session sends the visitor to sign-in with a `replace`; no group opens.
     expect(replace).not.toHaveBeenCalledWith("/");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a 401 on a member's join deletes the token and opens no group", async () => {
+    previewInvite.mockResolvedValue(previewOk(true));
+    joinWithInvite.mockResolvedValue(unauthorized);
+
+    await renderScreen();
+    await settle();
+
+    expect(joinWithInvite).toHaveBeenCalledTimes(1);
+    expect(await secureSessionStore.get()).toBeNull();
+    expect(replace).not.toHaveBeenCalledWith("/");
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+// REVIEW.md: a screen opened by a link, for the member's own join that runs after the preview.
+describe("#112 a member's join still pending", () => {
+  async function renderWithPendingJoin() {
+    const held = deferred<JoinAnswer>();
+    previewInvite.mockResolvedValueOnce(previewOk(true));
+    joinWithInvite.mockReturnValue(held.promise);
+    const view = await render(
+      <SessionProvider>
+        <Screens link={token} />
+      </SessionProvider>,
+    );
+    await settle();
+    expect(joinWithInvite).toHaveBeenCalledTimes(1);
+    return { held, view };
+  }
+
+  test("a second link arriving opens nothing for the first, and shows the second's heading", async () => {
+    const { held, view } = await renderWithPendingJoin();
+    previewInvite.mockResolvedValueOnce({
+      ok: true,
+      data: { groupName: "Nha Trang", alreadyMember: false },
+    });
+
+    await view.rerender(
+      <SessionProvider>
+        <Screens link={"D".repeat(43)} />
+      </SessionProvider>,
+    );
+    held.resolve({ ok: true, data: group });
+    await settle();
+
+    expect(await screen.findByTestId("invite-heading")).toHaveTextContent(
+      invitesCopy.heading("Nha Trang"),
+    );
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a malformed link arriving shows the bad-link text, and the first group is not opened", async () => {
+    const { held, view } = await renderWithPendingJoin();
+
+    await view.rerender(
+      <SessionProvider>
+        <Screens link="short" />
+      </SessionProvider>,
+    );
+    held.resolve({ ok: true, data: group });
+    await settle();
+
+    expect(screen.getByTestId("invite-bad-link")).toHaveTextContent(invitesCopy.badLink);
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a screen that unmounts opens nothing", async () => {
+    const { held, view } = await renderWithPendingJoin();
+
+    await view.unmount();
+    held.resolve({ ok: true, data: group });
+    await settle();
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });
 

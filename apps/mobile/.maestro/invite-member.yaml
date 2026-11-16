@@ -1,6 +1,6 @@
-# #98 A3: a member who opens their group's own invite lands on the groups list and nothing
-# changes: still one member, no invite screen. The app user makes the group in the app, and the
-# script, signed in as the same email, makes its invite.
+# #98 A3, #112 AC 2: a member who opens their group's own invite lands on the group's own screen
+# and nothing changes: still one member, no invite screen, no join button. The app user makes the
+# group in the app, and the script, signed in as the same email, makes its invite.
 appId: com.thanhwoe.gop
 ---
 - runFlow: subflows/fresh-start.yaml
@@ -15,14 +15,22 @@ appId: com.thanhwoe.gop
 - runScript: scripts/invite-link.js
 - runFlow: subflows/open-invite.yaml
 - assertVisible:
+    id: group-screen
+- assertVisible:
+    id: group-title
+    text: Da Lat
+- assertNotVisible:
+    id: invite-heading
+- assertNotVisible:
+    id: groups-heading
+- assertNotVisible:
+    id: invite-join
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-invite-member
+- runFlow: subflows/go-back.yaml
+- assertVisible:
     id: group-name
     text: Da Lat
 - assertVisible:
     id: group-member-count
     text: 1 thành viên
-- assertNotVisible:
-    id: invite-heading
-- assertNotVisible:
-    id: invite-join
-- evalScript: ${output.platform = maestro.platform.toLowerCase()}
-- takeScreenshot: ${output.platform}-invite-member
