@@ -79,11 +79,15 @@ async function pressTwiceWithoutWaiting(testID: string) {
 }
 
 let replace: jest.SpyInstance;
+let push: jest.SpyInstance;
+
+const groupHref = { pathname: "/groups/[id]", params: { id: group.id } };
 
 beforeEach(async () => {
   jest.resetAllMocks();
   takePendingInvite();
   replace = jest.spyOn(router, "replace").mockImplementation(() => {});
+  push = jest.spyOn(router, "push").mockImplementation(() => {});
   me.mockResolvedValue({ ok: true, data: user });
   previewInvite.mockResolvedValue(previewOk());
   joinWithInvite.mockResolvedValue({ ok: true, data: group });
@@ -169,8 +173,8 @@ describe("a signed-in visitor", () => {
     expect(screen.queryByTestId("invite-loading")).toBeNull();
   });
 
-  // #98 AC 2
-  test("joins with the link's token and then goes to the groups list", async () => {
+  // #112 AC 1: the groups list goes under the group's screen, so Back always lands on the list.
+  test("#112 AC 1: joining goes to the group's screen with the id from the join answer, over the groups list", async () => {
     await renderScreen();
     await screen.findByTestId("invite-join");
 
@@ -179,7 +183,22 @@ describe("a signed-in visitor", () => {
 
     expect(joinWithInvite).toHaveBeenCalledTimes(1);
     expect(joinWithInvite).toHaveBeenCalledWith("old-token", token);
+    expect(replace).toHaveBeenCalledTimes(1);
     expect(replace).toHaveBeenCalledWith("/");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(groupHref);
+    expect(replace.mock.invocationCallOrder[0]).toBeLessThan(push.mock.invocationCallOrder[0]);
+  });
+
+  // Guards the rule that the screen joins by itself only for a member.
+  test("#112 AC 1: opening a link joins nothing until join is pressed", async () => {
+    await renderScreen();
+    await screen.findByTestId("invite-join");
+    await settle();
+
+    expect(joinWithInvite).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   test("the join button is disabled while the request runs", async () => {

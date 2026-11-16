@@ -7,6 +7,12 @@ import { setPendingInvite } from "@/lib/pending-invite";
 import { useSession } from "@/lib/session";
 import { useSessionGuard } from "@/lib/session-guard";
 
+/** The groups list, then the group over it, so Back from the group lands on the list. */
+function openGroup(id: string) {
+  router.replace("/");
+  router.push({ pathname: "/groups/[id]", params: { id } });
+}
+
 /**
  * What an invite link opens in the app. `token` is whatever the link carried: the shared flow
  * decides whether it can be an invite's. The route is outside both session guards, so this screen
@@ -68,7 +74,7 @@ export function InviteScreen({ token }: { token: unknown }) {
         return;
       }
       if (outcome.kind === "joined") {
-        router.replace("/");
+        openGroup(outcome.group.id);
       } else if (outcome.kind === "bad-link") {
         setInvite({ kind: "bad-link" });
       } else {
