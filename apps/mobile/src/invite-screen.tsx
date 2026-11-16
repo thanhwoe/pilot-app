@@ -46,13 +46,21 @@ export function InviteScreen({ token }: { token: unknown }) {
     // first link's group, so its heading and join button never sit above the second link's token.
     setInvite(null);
     setJoinFailed(false);
-    guard(() => openMyInvite(link), isInviteSignedOut).then((answer) => {
+    guard(() => openMyInvite(link), isInviteSignedOut).then(async (answer) => {
       if (!answer || !current) {
         return;
       }
       if (answer.kind === "invite" && answer.alreadyMember) {
-        // Already a member: nothing to join, and nothing changes.
-        router.replace("/");
+        // Already a member: joining changes nothing, and gives the group id the preview lacks.
+        const outcome = await guard(() => joinMyInvite(link), isInviteSignedOut);
+        if (!outcome || !current) {
+          return;
+        }
+        if (outcome.kind === "joined") {
+          openGroup(outcome.group.id);
+        } else {
+          setInvite(outcome.kind === "bad-link" ? outcome : { kind: "unavailable" });
+        }
         return;
       }
       setInvite(answer);

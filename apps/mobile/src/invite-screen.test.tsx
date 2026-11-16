@@ -233,16 +233,43 @@ describe("a signed-in visitor", () => {
     expect(joinWithInvite).toHaveBeenCalledTimes(1);
   });
 
-  // #98 A3: a member lands on the groups list and nothing changes.
-  test("a member goes to the groups list with no join button and no join call", async () => {
+  // #98 A3, #112 AC 2: a member's own join changes nothing, and gives the id the preview lacks.
+  test("#112 AC 2: a member's join answer gives the group id, and the screen goes to that group", async () => {
     previewInvite.mockResolvedValue(previewOk(true));
 
     await renderScreen();
     await settle();
 
+    expect(joinWithInvite).toHaveBeenCalledTimes(1);
+    expect(joinWithInvite).toHaveBeenCalledWith("old-token", token);
     expect(replace).toHaveBeenCalledWith("/");
+    expect(push).toHaveBeenCalledWith(groupHref);
     expect(screen.queryByTestId("invite-join")).toBeNull();
-    expect(joinWithInvite).not.toHaveBeenCalled();
+  });
+
+  test("#112 A2: a member's join that fails shows the connection error, opens no group and keeps the token", async () => {
+    previewInvite.mockResolvedValue(previewOk(true));
+    joinWithInvite.mockResolvedValue({ ok: false, error: "unavailable" });
+
+    await renderScreen();
+
+    expect(await screen.findByTestId("invite-error")).toHaveTextContent(groupsCopy.unavailable);
+    expect(screen.queryByTestId("invite-join")).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(await secureSessionStore.get()).toBe("old-token");
+  });
+
+  test("#112 A2: a member's join that answers 404 shows the bad-link text and opens no group", async () => {
+    previewInvite.mockResolvedValue(previewOk(true));
+    joinWithInvite.mockResolvedValue({ ok: false, error: "not_found" });
+
+    await renderScreen();
+
+    expect(await screen.findByTestId("invite-bad-link")).toHaveTextContent(invitesCopy.badLink);
+    expect(screen.queryByTestId("invite-join")).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   test("a join that fails with another error shows the connection error, keeps the button and the token", async () => {
