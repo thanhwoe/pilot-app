@@ -1,7 +1,7 @@
 {
   "source": "thanhwoe/solo-factory plugins/factory-kit",
-  "version": "0.30.0",
-  "commit": "cb36949",
+  "version": "0.31.0",
+  "commit": "10bfe8f",
   "files": [
     ".claude/skills/factory-build/SKILL.md",
     ".claude/skills/factory-check/SKILL.md",
@@ -25,6 +25,7 @@
     ".claude/skills/factory-update-docs/SKILL.md",
     ".claude/skills/factory-verify/SKILL.md",
     ".claude/agents/factory-code-reviewer.md",
+    ".claude/agents/factory-gate-checker.md",
     ".claude/agents/factory-pr-describer.md",
     ".claude/agents/factory-test-writer.md",
     ".claude/factory-kit/scripts/factory-marker.mjs",
