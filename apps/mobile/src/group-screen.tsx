@@ -27,7 +27,9 @@ export function GroupScreen({ groupId }: { groupId: string }) {
   const guard = useSessionGuard();
   const [screen, setScreen] = useState<Screen | null>(null);
   // `failed`: a reload after a save did not work, so the rows shown may lack what was just saved.
-  const [reload, setReload] = useState<"idle" | "failed">("idle");
+  // `running`: the retry of that reload. The add button stays away in both, so the expense that
+  // is stored but not shown is not added a second time by hand.
+  const [reload, setReload] = useState<"idle" | "failed" | "running">("idle");
   // What the screen shows now, for `load` to read without being a dependency.
   const shown = useRef<Screen | null>(null);
   const [adding, setAdding] = useState(false);
@@ -61,9 +63,14 @@ export function GroupScreen({ groupId }: { groupId: string }) {
       return;
     }
     retrying.current = true;
-    // Back to the loading line until the request answers.
-    shown.current = null;
-    setScreen(null);
+    if (shown.current?.kind === "loaded") {
+      // Keep the rows on screen while the reload runs.
+      setReload("running");
+    } else {
+      // Back to the loading line until the request answers.
+      shown.current = null;
+      setScreen(null);
+    }
     try {
       await load();
     } finally {
@@ -86,7 +93,9 @@ export function GroupScreen({ groupId }: { groupId: string }) {
           {screen.group.name}
         </Text>
       )}
-      {screen === null && <Text testID="expenses-loading">{expensesCopy.loading}</Text>}
+      {(screen === null || reload === "running") && (
+        <Text testID="expenses-loading">{expensesCopy.loading}</Text>
+      )}
       {(screen?.kind === "unavailable" || reload === "failed") && (
         <>
           <Text testID="group-screen-error" style={styles.error}>
@@ -99,7 +108,7 @@ export function GroupScreen({ groupId }: { groupId: string }) {
       )}
       {screen?.kind === "loaded" && (
         <>
-          {reload === "failed" ? null : adding && myId ? (
+          {reload !== "idle" ? null : adding && myId ? (
             <ExpenseForm
               groupId={groupId}
               myId={myId}

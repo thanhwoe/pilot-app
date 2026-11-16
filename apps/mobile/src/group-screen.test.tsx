@@ -541,4 +541,118 @@ describe("#107 a failed reload after a save", () => {
     expect(screen.queryByTestId("add-expense")).toBeNull();
     expect(screen.queryByTestId("expense-amount-input")).toBeNull();
   });
+
+  test("AC 2: a retry that works shows the new expense once and brings the add button back", async () => {
+    await saveAndReload(() =>
+      listExpenses.mockResolvedValueOnce({ ok: false, error: "unavailable" }),
+    );
+    listExpenses.mockResolvedValue(listOf(saved, before));
+
+    await fireEvent.press(screen.getByTestId("group-screen-retry"));
+    await screen.findByTestId("add-expense");
+
+    expect(texts("expense-description")).toEqual(["An toi", "Taxi"]);
+    expect(screen.queryByTestId("group-screen-error")).toBeNull();
+    expect(createExpense).toHaveBeenCalledTimes(1);
+  });
+
+  test("the old rows stay and the loading line shows while the retry runs, with no add button", async () => {
+    await saveAndReload(() =>
+      listExpenses.mockResolvedValueOnce({ ok: false, error: "unavailable" }),
+    );
+    const held = deferred<GroupAnswer>();
+    getGroup.mockReturnValue(held.promise);
+
+    // Not `fireEvent.press`: it waits for the handler, which waits for the held request.
+    const { onClick } = screen.getByTestId("group-screen-retry").props;
+    await act(async () => {
+      onClick({ stopPropagation() {}, preventDefault() {}, nativeEvent: {} });
+    });
+
+    expect(screen.getByTestId("expenses-loading")).toBeTruthy();
+    expect(texts("expense-description")).toEqual(["Taxi"]);
+    expect(screen.queryByTestId("group-screen-error")).toBeNull();
+    expect(screen.queryByTestId("add-expense")).toBeNull();
+    held.resolve(groupOk);
+    await screen.findByTestId("add-expense");
+    expect(screen.queryByTestId("expenses-loading")).toBeNull();
+  });
+
+  test("a retry that fails again keeps the rows, shows the error again and keeps the add button away", async () => {
+    await saveAndReload(() =>
+      listExpenses.mockResolvedValueOnce({ ok: false, error: "unavailable" }),
+    );
+    listExpenses.mockResolvedValueOnce({ ok: false, error: "too_many_requests" });
+
+    await fireEvent.press(screen.getByTestId("group-screen-retry"));
+    await screen.findByTestId("group-screen-error");
+
+    expect(texts("expense-description")).toEqual(["Taxi"]);
+    expect(screen.queryByTestId("add-expense")).toBeNull();
+    expect(screen.queryByTestId("expenses-loading")).toBeNull();
+    expect(createExpense).toHaveBeenCalledTimes(1);
+  });
+
+  test("A5: two presses on retry before a re-render send one load", async () => {
+    await saveAndReload(() =>
+      listExpenses.mockResolvedValueOnce({ ok: false, error: "unavailable" }),
+    );
+    getGroup.mockClear();
+    const held = deferred<GroupAnswer>();
+    getGroup.mockReturnValue(held.promise);
+
+    await pressTwiceWithoutWaiting("group-screen-retry");
+    held.resolve(groupOk);
+    await settle();
+
+    expect(getGroup).toHaveBeenCalledTimes(1);
+    expect(createExpense).toHaveBeenCalledTimes(1);
+  });
+
+  describe("[security] AC 3", () => {
+    const unauthorized = { ok: false, error: "unauthorized" } as const;
+
+    test("a 401 on the group in the reload after a save deletes the token and shows sign-in", async () => {
+      listExpenses.mockResolvedValueOnce(listOf(before));
+      createExpense.mockResolvedValue({ ok: true, data: saved });
+      await renderScreen();
+      await openForm();
+      await fillForm("90000", "An toi");
+      getGroup.mockResolvedValueOnce(unauthorized);
+
+      await fireEvent.press(screen.getByTestId("save-expense"));
+      await settle();
+
+      expect(await secureSessionStore.get()).toBeNull();
+      expect(screen.queryByTestId("group-screen")).toBeNull();
+    });
+
+    test("a 401 on the expenses in the reload after a save deletes the token and shows sign-in", async () => {
+      listExpenses.mockResolvedValueOnce(listOf(before));
+      createExpense.mockResolvedValue({ ok: true, data: saved });
+      await renderScreen();
+      await openForm();
+      await fillForm("90000", "An toi");
+      listExpenses.mockResolvedValueOnce(unauthorized);
+
+      await fireEvent.press(screen.getByTestId("save-expense"));
+      await settle();
+
+      expect(await secureSessionStore.get()).toBeNull();
+      expect(screen.queryByTestId("group-screen")).toBeNull();
+    });
+
+    test("a 401 on the retry after a failed reload deletes the token and shows sign-in", async () => {
+      await saveAndReload(() =>
+        listExpenses.mockResolvedValueOnce({ ok: false, error: "unavailable" }),
+      );
+      getGroup.mockResolvedValueOnce(unauthorized);
+
+      await fireEvent.press(screen.getByTestId("group-screen-retry"));
+      await settle();
+
+      expect(await secureSessionStore.get()).toBeNull();
+      expect(screen.queryByTestId("group-screen")).toBeNull();
+    });
+  });
 });
