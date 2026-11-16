@@ -3,7 +3,7 @@ name: Factory stages
 # When the repository owner moves an issue through a gate, start the cloud scheduled task that runs
 # the next stage (thanhwoe/solo-factory docs/routines/intake-spec.md, ADR-010 there):
 #   `ready` → intake and spec, `spec-ok` → plan, `plan-ok` → build,
-#   a merged same-repo PR that says `Closes #<N>` → retro.
+#   a merged same-repo PR that closes an issue here (GitHub's closing issues, not its text) → retro.
 # It filters here, so other events start no session. The secrets keep their first names.
 
 on:
@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: factory-stages-${{ github.event.issue.number || github.event.pull_request.number }}
@@ -36,15 +38,19 @@ jobs:
           EVENT: ${{ github.event_name }}
           LABEL: ${{ github.event.label.name }}
           ISSUE: ${{ github.event.issue.number }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           case "$EVENT:$LABEL" in
             issues:ready) text="spec $ISSUE" ;;
             issues:spec-ok) text="plan $ISSUE" ;;
             issues:plan-ok) text="build $ISSUE" ;;
             pull_request:*)
-              # Only `Closes #<N>` in this repo: "closes owner/other#<N>" names another repository.
-              n=$(grep -oiE '(^|[^/[:alnum:]])closes #[0-9]+' <<<"$PR_BODY" | head -n 1 | grep -oE '[0-9]+$' || true)
+              # GitHub's own list of the issues this PR closed, in this repository only. Reading
+              # the body fired a retro for #112 from a PR that only quoted "Closes #112" (#124).
+              n=$(gh pr view "$PR" --repo "$REPO" --json closingIssuesReferences \
+                --jq "[.closingIssuesReferences[] | select(.url | startswith(\"https://github.com/$REPO/issues/\")) | .number] | first // empty")
               text=${n:+retro $n}
               [ -n "$text" ] || echo "::notice::The PR closes no issue here, so no retro."
               ;;
