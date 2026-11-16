@@ -1,0 +1,42 @@
+name: Bug
+description: Something that worked, or should have, and doesn't. The factory fixes it like any issue.
+labels: ["inbox", "bug"]
+body:
+  - type: input
+    id: found-in
+    attributes:
+      label: Found in
+      description: The issue or PR that introduced it, as `#<n>` or its link. Write `unknown` if you can't tell. The weekly report counts escaped defects from this field.
+      placeholder: "#118"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and on which app (api, web, mobile) and device.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: One Given/When/Then per behaviour the fix must restore. Each one becomes a test.
+      placeholder: |
+        - Given a group with members A and B
+          When A opens the group from an invite link
+          Then the group's screen shows, and Back lands on the groups list
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which apps change (api, web, mobile, shared), if you know.
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-goals
+      description: What the fix must not change.
