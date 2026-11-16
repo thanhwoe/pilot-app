@@ -1,6 +1,6 @@
-# #98 A3, #112 AC 2: a member who opens their group's own invite lands on the group's own screen and
-# nothing changes: still one member, no invite screen, no join button. The app user makes the group in the app, and the
-# script, signed in as the same email, makes its invite.
+# #98 A3, #112 AC 2: a member who opens their group's own invite lands on the group's own screen
+# and nothing changes: still one member, no invite screen, no join button. The app user makes the
+# group in the app, and the script, signed in as the same email, makes its invite.
 appId: com.thanhwoe.gop
 ---
 - runFlow: subflows/fresh-start.yaml
