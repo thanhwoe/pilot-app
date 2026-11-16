@@ -394,7 +394,88 @@ describe("[security] a rejected session", () => {
     await settle();
 
     expect(await secureSessionStore.get()).toBeNull();
+    // The ended session sends the visitor to sign-in with a `replace`; no group opens.
     expect(replace).not.toHaveBeenCalledWith("/");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a 401 on a member's join deletes the token and opens no group", async () => {
+    previewInvite.mockResolvedValue(previewOk(true));
+    joinWithInvite.mockResolvedValue(unauthorized);
+
+    await renderScreen();
+    await settle();
+
+    expect(joinWithInvite).toHaveBeenCalledTimes(1);
+    expect(await secureSessionStore.get()).toBeNull();
+    expect(replace).not.toHaveBeenCalledWith("/");
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+// REVIEW.md: a screen opened by a link, for the member's own join that runs after the preview.
+describe("#112 a member's join still pending", () => {
+  async function renderWithPendingJoin() {
+    const held = deferred<JoinAnswer>();
+    previewInvite.mockResolvedValueOnce(previewOk(true));
+    joinWithInvite.mockReturnValue(held.promise);
+    const view = await render(
+      <SessionProvider>
+        <Screens link={token} />
+      </SessionProvider>,
+    );
+    await settle();
+    expect(joinWithInvite).toHaveBeenCalledTimes(1);
+    return { held, view };
+  }
+
+  test("a second link arriving opens nothing for the first, and shows the second's heading", async () => {
+    const { held, view } = await renderWithPendingJoin();
+    previewInvite.mockResolvedValueOnce({
+      ok: true,
+      data: { groupName: "Nha Trang", alreadyMember: false },
+    });
+
+    await view.rerender(
+      <SessionProvider>
+        <Screens link={"D".repeat(43)} />
+      </SessionProvider>,
+    );
+    held.resolve({ ok: true, data: group });
+    await settle();
+
+    expect(await screen.findByTestId("invite-heading")).toHaveTextContent(
+      invitesCopy.heading("Nha Trang"),
+    );
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a malformed link arriving shows the bad-link text, and the first group is not opened", async () => {
+    const { held, view } = await renderWithPendingJoin();
+
+    await view.rerender(
+      <SessionProvider>
+        <Screens link="short" />
+      </SessionProvider>,
+    );
+    held.resolve({ ok: true, data: group });
+    await settle();
+
+    expect(screen.getByTestId("invite-bad-link")).toHaveTextContent(invitesCopy.badLink);
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a screen that unmounts opens nothing", async () => {
+    const { held, view } = await renderWithPendingJoin();
+
+    await view.unmount();
+    held.resolve({ ok: true, data: group });
+    await settle();
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });
 
