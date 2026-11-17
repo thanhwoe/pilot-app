@@ -63,6 +63,39 @@ Right (#107):
 It says which tests fail first and why, from the code the step leaves, which may not and why, and
 what to do if one doesn't, outside "done when".
 
+## A test that a spy is not called
+
+Wrong (#112, step 3): the 401 ends the session, and the same screen then calls
+`replace("/sign-in")`, so this fails in the build.
+
+```markdown
+Change the existing `a 401 on the join deletes the token` test's last assertion to `expect(replace).not.toHaveBeenCalled()`.
+```
+
+Right:
+
+```markdown
+Keep `expect(replace).not.toHaveBeenCalledWith("/")` and add `expect(replace).not.toHaveBeenCalledWith(groupHref)`: `grep -n 'replace(' invite-screen.tsx` finds the signed-out effect's `replace("/sign-in")`, which a 401 reaches.
+```
+
+It names the search and the other call it found, and asserts only the call the test is about.
+
+## A risk to what the user can do today
+
+Wrong (#112): the plan names an option that keeps Back working, takes the other one, and asks.
+
+```markdown
+The alternative is to open the list first and then the group (`replace("/")`, then `push`), so Back always works, at the cost of a second navigation. The plan follows the issue and uses one `replace`. Question for the author: is that acceptable?
+```
+
+Right:
+
+```markdown
+**Back after joining.** One `replace` would leave nothing under the group screen after sign-in or a cold start, so Back would leave the app. The plan opens the list first and then pushes the group (`replace("/")`, then `push`), so Back always lands on the list. The cost is a second navigation, which step 4's flows check.
+```
+
+It keeps what works today and says the cost. A question is only for a risk no option avoids.
+
 ## A question for the author
 
 Wrong: a question the build can't act on when `plan-ok` comes with no answer.
