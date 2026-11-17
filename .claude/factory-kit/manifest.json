@@ -1,7 +1,7 @@
 {
   "source": "thanhwoe/solo-factory plugins/factory-kit",
-  "version": "0.33.0",
-  "commit": "9ddef82",
+  "version": "0.34.0",
+  "commit": "63be685",
   "files": [
     ".claude/skills/factory-build/SKILL.md",
     ".claude/skills/factory-capture/SKILL.md",
@@ -14,6 +14,7 @@
     ".claude/skills/factory-plan/SKILL.md",
     ".claude/skills/factory-plan/examples/plan.md",
     ".claude/skills/factory-plan/examples/shapes.md",
+    ".claude/skills/factory-qa/SKILL.md",
     ".claude/skills/factory-report/SKILL.md",
     ".claude/skills/factory-retro/SKILL.md",
     ".claude/skills/factory-review/SKILL.md",
