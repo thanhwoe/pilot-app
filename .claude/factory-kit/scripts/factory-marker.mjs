@@ -4,16 +4,21 @@
 //
 //   node factory-marker.mjs line <stage> <issue> ['<json fields>']
 //       prints `<!-- factory-kit {"stage":…,"issue":…,"kit":…,…} -->`; append it to the comment body
+//   node factory-marker.mjs line capture - ['<json fields>']
+//       the same, with no issue: capture puts it at the end of the body of the issue it creates
 //   node factory-marker.mjs read <comments file>
 //       prints {"markers":[…],"untrusted":n}. The file holds the issue's comments as a JSON array, or
 //       one per line (`gh api --paginate …/comments --jq '.[]'`). A marker counts only on a comment
 //       whose author_association is OWNER, MEMBER or COLLABORATOR; others are counted in `untrusted`.
+//   node factory-marker.mjs body <issue file>
+//       prints {"marker":{…}|null,"untrusted":bool} for the marker in an issue's body
+//       (`gh api …/issues/<N> > <file>`), counted on the same terms.
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const STAGES = ['intake', 'spec', 'plan', 'handover', 'retro'];
+export const STAGES = ['capture', 'intake', 'spec', 'plan', 'handover', 'retro'];
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const FIXED = ['stage', 'issue', 'kit'];
 const MARKER = /<!-- factory-kit (\{.*\}) -->/g;
@@ -33,9 +38,12 @@ export const kitVersion = (scriptsDir) => {
 
 export const markerLine = (stage, issue, fields, version) => {
   if (!STAGES.includes(stage)) throw new UsageError(`stage must be one of ${STAGES.join(', ')}`);
-  if (!/^\d+$/.test(String(issue))) throw new UsageError('issue must be a number');
+  // capture writes its marker into the body of the issue it is about to create, so no number yet.
+  const noIssue = stage === 'capture' && issue === '-';
+  if (!noIssue && !/^\d+$/.test(String(issue))) throw new UsageError('issue must be a number');
   for (const key of FIXED) if (key in fields) throw new UsageError(`fields can't set ${key}`);
-  const json = JSON.stringify({ stage, issue: Number(issue), kit: version, ...fields });
+  const head = noIssue ? { stage } : { stage, issue: Number(issue) };
+  const json = JSON.stringify({ ...head, kit: version, ...fields });
   if (json.includes('-->')) throw new UsageError("fields can't contain -->, which would end the comment");
   return `<!-- factory-kit ${json} -->`;
 };
@@ -79,7 +87,15 @@ export const readMarkers = (comments) => {
   return { markers, untrusted };
 };
 
-const USAGE = "usage: factory-marker.mjs line <stage> <issue> ['<json fields>'] | read <comments file>";
+/** The marker in an issue's body, counted only when its author has write access. */
+export const bodyMarker = (issue) => {
+  const marker = lastMarker(issue.body);
+  if (marker && !TRUSTED.has(issue.author_association)) return { marker: null, untrusted: true };
+  return { marker, untrusted: false };
+};
+
+const USAGE =
+  "usage: factory-marker.mjs line <stage> <issue|-> ['<json fields>'] | read <comments file> | body <issue file>";
 
 const main = () => {
   const [command, ...args] = process.argv.slice(2);
@@ -101,6 +117,10 @@ const main = () => {
   }
   if (command === 'read' && args.length === 1) {
     console.log(JSON.stringify(readMarkers(parseComments(readFileSync(args[0], 'utf8')))));
+    return;
+  }
+  if (command === 'body' && args.length === 1) {
+    console.log(JSON.stringify(bodyMarker(JSON.parse(readFileSync(args[0], 'utf8')))));
     return;
   }
   throw new UsageError('');

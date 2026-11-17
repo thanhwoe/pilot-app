@@ -1,9 +1,10 @@
 {
   "source": "thanhwoe/solo-factory plugins/factory-kit",
-  "version": "0.32.0",
-  "commit": "64b54ac",
+  "version": "0.33.0",
+  "commit": "9ddef82",
   "files": [
     ".claude/skills/factory-build/SKILL.md",
+    ".claude/skills/factory-capture/SKILL.md",
     ".claude/skills/factory-check/SKILL.md",
     ".claude/skills/factory-checkout-branch/SKILL.md",
     ".claude/skills/factory-commit/SKILL.md",
