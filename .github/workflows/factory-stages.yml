@@ -2,15 +2,17 @@ name: Factory stages
 
 # When the repository owner moves an issue through a gate, start the cloud scheduled task that runs
 # the next stage (thanhwoe/solo-factory docs/routines/intake-spec.md, ADR-010 there):
-#   `ready` → intake and spec, `spec-ok` → plan, `plan-ok` → build,
-#   a merged same-repo PR that closes an issue here (GitHub's closing issues, not its text) → retro.
+#   `ready` → intake and spec, `spec-ok` → plan and QA step 1, `plan-ok` → build (and QA step 1 in
+#   the small lane, which has no `spec-ok`), a same-repo PR opening that closes an issue labelled
+#   `qa` → QA step 2, and a merged same-repo PR that closes an issue here → retro. "Closes" is
+#   GitHub's closing issues, not the PR's text (ADR-013 there for QA).
 # It filters here, so other events start no session. The secrets keep their first names.
 
 on:
   issues:
     types: [labeled]
   pull_request:
-    types: [closed]
+    types: [opened, closed]
 
 permissions:
   contents: read
@@ -27,8 +29,10 @@ jobs:
       github.event.sender.login == github.repository_owner && (
         (github.event_name == 'issues' && !github.event.issue.pull_request &&
           contains(fromJSON('["ready", "spec-ok", "plan-ok"]'), github.event.label.name)) ||
-        (github.event_name == 'pull_request' && github.event.pull_request.merged &&
-          github.event.pull_request.head.repo.full_name == github.repository))
+        (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          (github.event.pull_request.merged ||
+            (github.event.action == 'opened' && !startsWith(github.event.pull_request.head.ref, 'qa/')))))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -39,23 +43,44 @@ jobs:
           LABEL: ${{ github.event.label.name }}
           ISSUE: ${{ github.event.issue.number }}
           PR: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+          HAS_QA: ${{ contains(github.event.issue.labels.*.name, 'qa') }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          # One stage per line: spec-ok starts the plan and QA step 1 side by side.
           case "$EVENT:$LABEL" in
             issues:ready) text="spec $ISSUE" ;;
-            issues:spec-ok) text="plan $ISSUE" ;;
-            issues:plan-ok) text="build $ISSUE" ;;
+            issues:spec-ok) text=$(printf 'plan %s\nqa %s' "$ISSUE" "$ISSUE") ;;
+            issues:plan-ok)
+              # The small lane has no spec-ok, so QA starts here unless step 1 already labelled it.
+              text="build $ISSUE"
+              [ "$HAS_QA" = true ] || text=$(printf '%s\nqa %s' "$text" "$ISSUE")
+              ;;
             pull_request:*)
-              # GitHub's own list of the issues this PR closed, in this repository only. Reading
+              # GitHub's own list of the issues this PR closes, in this repository only. Reading
               # the body fired a retro for #112 from a PR that only quoted "Closes #112" (#124).
               n=$(gh pr view "$PR" --repo "$REPO" --json closingIssuesReferences \
                 --jq "[.closingIssuesReferences[] | select(.url | startswith(\"https://github.com/$REPO/issues/\")) | .number] | first // empty")
-              text=${n:+retro $n}
-              [ -n "$text" ] || echo "::notice::The PR closes no issue here, so no retro."
+              if [ -z "$n" ]; then
+                echo "::notice::The PR closes no issue here, so no stage."
+              elif [ "$ACTION" = opened ]; then
+                # QA step 2 only for an issue QA step 1 labelled.
+                if gh api "repos/$REPO/issues/$n" --jq '[.labels[].name] | index("qa")' | grep -q '^[0-9]'; then
+                  text="qa $n"
+                else
+                  echo "::notice::Issue #$n has no qa label, so no QA step 2."
+                fi
+              else
+                text="retro $n"
+              fi
               ;;
           esac
-          echo "text=${text:-}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'text<<EOF'
+            echo "${text:-}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Fire the routine
         if: steps.stage.outputs.text != ''
         env:
@@ -69,10 +94,13 @@ jobs:
             echo "::warning::INTAKE_SPEC_FIRE_URL or INTAKE_SPEC_FIRE_TOKEN is not set, so no session started."
             exit 0
           fi
-          response=$(curl -sS --fail-with-body -X POST "$FIRE_URL" \
-            -H "Authorization: Bearer $FIRE_TOKEN" \
-            -H "anthropic-beta: $ROUTINE_BETA" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n --arg text "$TEXT" '{text: $text}')")
-          echo "Session for '$TEXT': $(jq -r .claude_code_session_url <<<"$response")"
+          while IFS= read -r stage; do
+            [ -n "$stage" ] || continue
+            response=$(curl -sS --fail-with-body -X POST "$FIRE_URL" \
+              -H "Authorization: Bearer $FIRE_TOKEN" \
+              -H "anthropic-beta: $ROUTINE_BETA" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n --arg text "$stage" '{text: $text}')")
+            echo "Session for '$stage': $(jq -r .claude_code_session_url <<<"$response")"
+          done <<<"$TEXT"
