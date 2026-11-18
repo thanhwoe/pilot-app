@@ -219,11 +219,39 @@ describe("createGroupsApi", () => {
       });
     });
 
+    it("#134 AC 6: gets /groups/:id/balances with the bearer token and parses it", async () => {
+      const answer = {
+        balances: [{ userId: me, balance: 5000 }],
+        suggestions: [{ from: me, to: me, amount: 5000 }],
+      };
+      const fetchFn = fakeFetch(200, answer);
+      const api = createGroupsApi("http://api.test", fetchFn);
+
+      expect(await api.getBalances("t0ken", group.id)).toEqual({ ok: true, data: answer });
+      expect(fetchFn).toHaveBeenCalledWith(`http://api.test/groups/${group.id}/balances`, {
+        headers: { authorization: "Bearer t0ken" },
+        signal: expect.any(AbortSignal),
+      });
+    });
+
+    it("#134 AC 6: a balances body that fails the schema is an error, not figures", async () => {
+      const api = createGroupsApi(
+        "http://api.test",
+        fakeFetch(200, { balances: [{ userId: me, balance: 1.5 }], suggestions: [] }),
+      );
+
+      expect((await api.getBalances("t0ken", group.id)).ok).toBe(false);
+    });
+
     it.each([
       ["getGroup", (api: ReturnType<typeof createGroupsApi>) => api.getGroup("t0ken", group.id)],
       [
         "listExpenses",
         (api: ReturnType<typeof createGroupsApi>) => api.listExpenses("t0ken", group.id),
+      ],
+      [
+        "getBalances",
+        (api: ReturnType<typeof createGroupsApi>) => api.getBalances("t0ken", group.id),
       ],
       [
         "createExpense",

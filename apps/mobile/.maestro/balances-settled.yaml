@@ -1,0 +1,24 @@
+# #134 AC 3: a new group with no expenses says "Đã cân bằng", lists its one member at 0 ₫ and
+# shows no payment line.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runFlow: subflows/create-group.yaml
+- tapOn:
+    id: group-row
+- assertVisible:
+    id: balances-section
+- assertVisible:
+    id: balances-settled
+    text: Đã cân bằng
+- assertVisible:
+    id: balance-row
+- assertVisible: Bạn
+- assertVisible: 0 ₫
+- assertNotVisible:
+    id: payment-line
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-balances-settled

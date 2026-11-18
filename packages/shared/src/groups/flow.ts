@@ -1,3 +1,4 @@
+import type { BalancesResponse } from "../balances";
 import {
   createExpenseBodySchema,
   EXPENSE_AMOUNT_MAX,
@@ -204,6 +205,41 @@ export async function loadGroupScreen(
   }
   if (guardedGroup.kind === "ok" && guardedExpenses.kind === "ok") {
     return { kind: "loaded", group: guardedGroup.data, expenses: guardedExpenses.data.expenses };
+  }
+  return { kind: "unavailable" };
+}
+
+/** What the balances section shows (#134). It never holds figures while loading or after a failure. */
+export type BalancesState =
+  | { kind: "loaded"; balances: BalancesResponse; members: GroupDetailResponse["members"] }
+  | { kind: "unavailable" }
+  | { kind: "signed-out" };
+
+/** The balances answered that the API rejected the session. */
+export function isBalancesSignedOut(state: BalancesState): state is { kind: "signed-out" } {
+  return state.kind === "signed-out";
+}
+
+/**
+ * The balances with the member list they are named from. The section loads the members itself, so
+ * a failed expenses load doesn't turn every email into "Thành viên khác". Only a 401 is signed out.
+ */
+export async function loadBalances(
+  api: GroupsApi,
+  token: string,
+  groupId: string,
+): Promise<BalancesState> {
+  const [balances, group] = await Promise.all([
+    api.getBalances(token, groupId),
+    api.getGroup(token, groupId),
+  ]);
+  const guardedBalances = guardSession(balances);
+  const guardedGroup = guardSession(group);
+  if (guardedBalances.kind === "signed-out" || guardedGroup.kind === "signed-out") {
+    return { kind: "signed-out" };
+  }
+  if (guardedBalances.kind === "ok" && guardedGroup.kind === "ok") {
+    return { kind: "loaded", balances: guardedBalances.data, members: guardedGroup.data.members };
   }
   return { kind: "unavailable" };
 }

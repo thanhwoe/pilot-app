@@ -18,7 +18,12 @@ jest.mock("expo-secure-store", () => require("@/test-support/secure-store-mock")
 jest.mock("@/lib/api", () => ({
   apiUrl: "http://api.test",
   authApi: { requestCode: jest.fn(), signIn: jest.fn(), me: jest.fn(), signOut: jest.fn() },
-  groupsApi: { getGroup: jest.fn(), listExpenses: jest.fn(), createExpense: jest.fn() },
+  groupsApi: {
+    getGroup: jest.fn(),
+    listExpenses: jest.fn(),
+    createExpense: jest.fn(),
+    getBalances: jest.fn(),
+  },
 }));
 
 const me = jest.mocked(authApi.me);
@@ -26,6 +31,7 @@ const signInApi = jest.mocked(authApi.signIn);
 const getGroup = jest.mocked(groupsApi.getGroup);
 const listExpenses = jest.mocked(groupsApi.listExpenses);
 const createExpense = jest.mocked(groupsApi.createExpense);
+const getBalances = jest.mocked(groupsApi.getBalances);
 
 const user = { id: crypto.randomUUID(), email: "an@example.com" };
 const bao = { userId: crypto.randomUUID(), email: "bao@example.com" };
@@ -102,6 +108,7 @@ beforeEach(async () => {
   signInApi.mockResolvedValue({ ok: true, data: { token: "new-token", user } });
   getGroup.mockResolvedValue(groupOk);
   listExpenses.mockResolvedValue(listOf());
+  getBalances.mockResolvedValue({ ok: true, data: { balances: [], suggestions: [] } });
   await secureSessionStore.set("old-token");
 });
 
@@ -697,5 +704,255 @@ describe("a second group id while the screen is open", () => {
     expect(screen.queryByTestId("group-title")).toBeNull();
     expect(screen.queryByTestId("expense-row")).toBeNull();
     expect(screen.queryByTestId("add-expense")).toBeNull();
+  });
+});
+
+// #134: the balances section.
+describe("#134 balances", () => {
+  type BalancesAnswer = Awaited<ReturnType<typeof groupsApi.getBalances>>;
+  const owed: BalancesAnswer = {
+    ok: true,
+    data: {
+      balances: [
+        { userId: user.id, balance: 50000 },
+        { userId: bao.userId, balance: -50000 },
+      ],
+      suggestions: [{ from: bao.userId, to: user.id, amount: 50000 }],
+    },
+  };
+  const unavailable: BalancesAnswer = { ok: false, error: "unavailable" };
+
+  const textOf = (id: string) =>
+    screen.getAllByTestId(id).map((node) => {
+      const flat = (child: unknown): string =>
+        Array.isArray(child) ? child.map(flat).join("") : String(child);
+      return flat(node.props.children);
+    });
+
+  // AC 1, AC 2, A11
+  test("shows a row per member and a line per payment, each with a testID", async () => {
+    getBalances.mockResolvedValue(owed);
+
+    await renderScreen();
+    await screen.findAllByTestId("balance-row");
+
+    expect(screen.getByTestId("balances-section")).toBeTruthy();
+    expect(getBalances).toHaveBeenCalledWith("old-token", groupId);
+    expect(screen.getAllByTestId("balance-row")).toHaveLength(2);
+    expect(screen.getByText("Bạn")).toBeTruthy();
+    expect(screen.getByText("+50.000 ₫")).toBeTruthy();
+    expect(screen.getByText("bao@example.com")).toBeTruthy();
+    expect(screen.getByText("\u221250.000 ₫")).toBeTruthy();
+    expect(textOf("payment-line")).toEqual(["bao@example.com trả Bạn 50.000 ₫"]);
+    expect(screen.queryByTestId("balances-settled")).toBeNull();
+  });
+
+  // AC 3
+  test("all-zero balances show Đã cân bằng, the members at 0 ₫ and no payment line", async () => {
+    getBalances.mockResolvedValue({
+      ok: true,
+      data: {
+        balances: [
+          { userId: user.id, balance: 0 },
+          { userId: bao.userId, balance: 0 },
+        ],
+        suggestions: [],
+      },
+    });
+
+    await renderScreen();
+    await screen.findAllByTestId("balance-row");
+
+    expect(screen.getByTestId("balances-settled")).toHaveTextContent("Đã cân bằng");
+    expect(screen.getAllByText("0 ₫")).toHaveLength(2);
+    expect(screen.queryByTestId("payment-line")).toBeNull();
+  });
+
+  // A9
+  test("shows the loading line and no figures while pending", async () => {
+    const held = deferred<BalancesAnswer>();
+    getBalances.mockReturnValue(held.promise);
+
+    await renderScreen();
+
+    expect(await screen.findByTestId("balances-loading")).toHaveTextContent("Đang tải số dư…");
+    expect(screen.queryByTestId("balance-row")).toBeNull();
+    held.resolve(owed);
+    await screen.findAllByTestId("balance-row");
+    expect(screen.queryByTestId("balances-loading")).toBeNull();
+  });
+
+  // AC 4
+  test("after a save the balances load again and show the new figures", async () => {
+    getBalances.mockResolvedValueOnce(owed).mockResolvedValue({
+      ok: true,
+      data: {
+        balances: [
+          { userId: user.id, balance: 10000 },
+          { userId: bao.userId, balance: -10000 },
+        ],
+        suggestions: [{ from: bao.userId, to: user.id, amount: 10000 }],
+      },
+    });
+    createExpense.mockResolvedValue({
+      ok: true,
+      data: expense("Cafe", 60000, user.id, "2026-11-13T12:00:00.000Z"),
+    });
+    await renderScreen();
+    await screen.findAllByTestId("balance-row");
+
+    await fireEvent.press(await screen.findByTestId("add-expense"));
+    await fireEvent.changeText(screen.getByTestId("expense-amount-input"), "60000");
+    await fireEvent.changeText(screen.getByTestId("expense-description-input"), "Cafe");
+    await fireEvent.press(screen.getByTestId("save-expense"));
+    await screen.findByText("+10.000 ₫");
+
+    expect(getBalances).toHaveBeenCalledTimes(2);
+    expect(textOf("payment-line")).toEqual(["bao@example.com trả Bạn 10.000 ₫"]);
+  });
+
+  // AC 5, A6
+  test.each([
+    ["a network error", { ok: false, error: "unavailable" }],
+    ["a 500", { ok: false, error: "unavailable" }],
+  ] as const)(
+    "%s shows the error and retry, keeps expenses and the add button",
+    async (_n, answer) => {
+      listExpenses.mockResolvedValue(
+        listOf(expense("Taxi", 50000, user.id, "2026-11-13T12:00:00.000Z")),
+      );
+      getBalances.mockResolvedValue(answer);
+
+      await renderScreen();
+
+      expect(await screen.findByTestId("balances-error")).toHaveTextContent(groupsCopy.unavailable);
+      expect(screen.getByTestId("balances-retry")).toHaveTextContent("Thử lại");
+      expect(screen.getAllByTestId("expense-row")).toHaveLength(1);
+      expect(screen.getByTestId("add-expense")).toBeTruthy();
+      expect(screen.queryByTestId("balance-row")).toBeNull();
+    },
+  );
+
+  test("the retry reloads only the balances, and two fast presses send one call", async () => {
+    getBalances.mockResolvedValueOnce(unavailable);
+    await renderScreen();
+    await screen.findByTestId("balances-error");
+    listExpenses.mockClear();
+    getBalances.mockClear();
+    const held = deferred<BalancesAnswer>();
+    getBalances.mockReturnValue(held.promise);
+
+    const { onClick } = screen.getByTestId("balances-retry").props;
+    const press = { stopPropagation() {}, preventDefault() {}, nativeEvent: {} };
+    await act(async () => {
+      onClick(press);
+      onClick(press);
+    });
+    held.resolve(owed);
+    await screen.findAllByTestId("balance-row");
+
+    expect(getBalances).toHaveBeenCalledTimes(1);
+    expect(listExpenses).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("balances-error")).toBeNull();
+  });
+
+  test("a failed reload after a save shows the error, not the old figures", async () => {
+    getBalances.mockResolvedValueOnce(owed).mockResolvedValue(unavailable);
+    createExpense.mockResolvedValue({
+      ok: true,
+      data: expense("Cafe", 60000, user.id, "2026-11-13T12:00:00.000Z"),
+    });
+    await renderScreen();
+    await screen.findAllByTestId("balance-row");
+
+    await fireEvent.press(await screen.findByTestId("add-expense"));
+    await fireEvent.changeText(screen.getByTestId("expense-amount-input"), "60000");
+    await fireEvent.changeText(screen.getByTestId("expense-description-input"), "Cafe");
+    await fireEvent.press(screen.getByTestId("save-expense"));
+
+    expect(await screen.findByTestId("balances-error")).toBeTruthy();
+    expect(screen.queryByTestId("balance-row")).toBeNull();
+    expect(screen.queryByTestId("payment-line")).toBeNull();
+  });
+
+  // A5
+  test("expense rows show while balances are pending, and balances show with emails while expenses fail", async () => {
+    listExpenses.mockResolvedValue(
+      listOf(expense("Taxi", 50000, user.id, "2026-11-13T12:00:00.000Z")),
+    );
+    const held = deferred<BalancesAnswer>();
+    getBalances.mockReturnValue(held.promise);
+    await renderScreen();
+    expect(await screen.findAllByTestId("expense-row")).toHaveLength(1);
+    held.resolve(owed);
+    await screen.findAllByTestId("balance-row");
+  });
+
+  test("balances name members by email even when the expenses call fails", async () => {
+    listExpenses.mockResolvedValue({ ok: false, error: "unavailable" });
+    getBalances.mockResolvedValue(owed);
+
+    await renderScreen();
+    await screen.findAllByTestId("balance-row");
+
+    expect(screen.getByText("bao@example.com")).toBeTruthy();
+    expect(screen.queryByText("Thành viên khác")).toBeNull();
+    expect(await screen.findByTestId("group-screen-error")).toBeTruthy();
+  });
+
+  // AC 6 [security]
+  describe("[security]", () => {
+    const unauthorized: BalancesAnswer = { ok: false, error: "unauthorized" };
+
+    test("a 401 on the first load deletes the token and shows sign-in", async () => {
+      getBalances.mockResolvedValue(unauthorized);
+
+      await renderScreen();
+      await settle();
+
+      expect(await secureSessionStore.get()).toBeNull();
+      expect(screen.queryByTestId("group-screen")).toBeNull();
+    });
+
+    test("a 401 on the retry deletes the token and shows sign-in", async () => {
+      getBalances.mockResolvedValueOnce(unavailable);
+      await renderScreen();
+      await screen.findByTestId("balances-error");
+      getBalances.mockResolvedValue(unauthorized);
+
+      await fireEvent.press(screen.getByTestId("balances-retry"));
+      await settle();
+
+      expect(await secureSessionStore.get()).toBeNull();
+      expect(screen.queryByTestId("group-screen")).toBeNull();
+    });
+
+    test("a 401 on the reload after a save deletes the token and shows sign-in", async () => {
+      getBalances.mockResolvedValueOnce(owed).mockResolvedValue(unauthorized);
+      createExpense.mockResolvedValue({
+        ok: true,
+        data: expense("Cafe", 60000, user.id, "2026-11-13T12:00:00.000Z"),
+      });
+      await renderScreen();
+      await screen.findAllByTestId("balance-row");
+
+      await fireEvent.press(await screen.findByTestId("add-expense"));
+      await fireEvent.changeText(screen.getByTestId("expense-amount-input"), "60000");
+      await fireEvent.changeText(screen.getByTestId("expense-description-input"), "Cafe");
+      await fireEvent.press(screen.getByTestId("save-expense"));
+      await settle();
+
+      expect(await secureSessionStore.get()).toBeNull();
+      expect(screen.queryByTestId("group-screen")).toBeNull();
+    });
+
+    test("a 500 keeps the token", async () => {
+      getBalances.mockResolvedValue(unavailable);
+
+      await renderScreen();
+      await screen.findByTestId("balances-error");
+
+      expect(await secureSessionStore.get()).toBe("old-token");
+    });
   });
 });
