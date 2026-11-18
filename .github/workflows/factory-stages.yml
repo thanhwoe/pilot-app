@@ -6,6 +6,8 @@ name: Factory stages
 #   the small lane, which has no `spec-ok`), a same-repo PR opening that closes an issue labelled
 #   `qa` → QA step 2, and a merged same-repo PR that closes an issue here → retro. "Closes" is
 #   GitHub's closing issues, not the PR's text (ADR-013 there for QA).
+# `mac-build`, which a cloud build adds when it stops at a `mac` step, starts a second scheduled
+#   task on the Mac mini instead (docs/routines/mac-build.md, ADR-015 there).
 # It filters here, so other events start no session. The secrets keep their first names.
 
 on:
@@ -28,7 +30,7 @@ jobs:
     if: >-
       github.event.sender.login == github.repository_owner && (
         (github.event_name == 'issues' && !github.event.issue.pull_request &&
-          contains(fromJSON('["ready", "spec-ok", "plan-ok"]'), github.event.label.name)) ||
+          contains(fromJSON('["ready", "spec-ok", "plan-ok", "mac-build"]'), github.event.label.name)) ||
         (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           (github.event.pull_request.merged ||
@@ -51,6 +53,7 @@ jobs:
           # One stage per line: spec-ok starts the plan and QA step 1 side by side.
           case "$EVENT:$LABEL" in
             issues:ready) text="spec $ISSUE" ;;
+            issues:mac-build) text="build $ISSUE"; routine=mac ;;
             issues:spec-ok) text=$(printf 'plan %s\nqa %s' "$ISSUE" "$ISSUE") ;;
             issues:plan-ok)
               # The small lane has no spec-ok, so QA starts here unless step 1 already labelled it.
@@ -77,6 +80,7 @@ jobs:
               ;;
           esac
           {
+            echo "routine=${routine:-stages}"
             echo 'text<<EOF'
             echo "${text:-}"
             echo 'EOF'
@@ -84,14 +88,29 @@ jobs:
       - name: Fire the routine
         if: steps.stage.outputs.text != ''
         env:
-          FIRE_URL: ${{ secrets.INTAKE_SPEC_FIRE_URL }}
-          FIRE_TOKEN: ${{ secrets.INTAKE_SPEC_FIRE_TOKEN }}
+          # Picked in the script, not with `a && b || c`: that falls back to the cloud task's secrets
+          # when the Mac mini's are empty, and sent #134's `mac-build` to the cloud.
+          STAGES_URL: ${{ secrets.INTAKE_SPEC_FIRE_URL }}
+          STAGES_TOKEN: ${{ secrets.INTAKE_SPEC_FIRE_TOKEN }}
+          MAC_URL: ${{ secrets.MAC_BUILD_FIRE_URL }}
+          MAC_TOKEN: ${{ secrets.MAC_BUILD_FIRE_TOKEN }}
+          ROUTINE: ${{ steps.stage.outputs.routine }}
           TEXT: ${{ steps.stage.outputs.text }}
           # The /fire endpoint is in research preview; a breaking change ships under a new header.
           ROUTINE_BETA: experimental-cc-routine-2026-04-01
         run: |
+          # `mac-build` goes to the Mac mini's task, everything else to the cloud one.
+          if [ "$ROUTINE" = mac ]; then
+            FIRE_URL=$MAC_URL FIRE_TOKEN=$MAC_TOKEN
+          else
+            FIRE_URL=$STAGES_URL FIRE_TOKEN=$STAGES_TOKEN
+          fi
           if [ -z "$FIRE_URL" ] || [ -z "$FIRE_TOKEN" ]; then
-            echo "::warning::INTAKE_SPEC_FIRE_URL or INTAKE_SPEC_FIRE_TOKEN is not set, so no session started."
+            if [ "$ROUTINE" = mac ]; then
+              echo "::warning::MAC_BUILD_FIRE_URL or MAC_BUILD_FIRE_TOKEN is not set, so the Mac mini build didn't start. Run /factory-build with --from on the Mac mini."
+            else
+              echo "::warning::INTAKE_SPEC_FIRE_URL or INTAKE_SPEC_FIRE_TOKEN is not set, so no session started."
+            fi
             exit 0
           fi
           while IFS= read -r stage; do
