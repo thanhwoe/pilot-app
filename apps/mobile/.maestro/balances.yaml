@@ -1,0 +1,56 @@
+# #134 AC 1, 2, 4: the group screen shows each member's balance and who pays whom. The script adds
+# a second member, "An toi" 90.000 paid by them and "Taxi" 50.000 paid by me: each share is 70.000,
+# so I am at −20.000 and they are at +20.000. Adding "Cafe" 60.000 on the screen moves it to +10.000
+# and −10.000 without leaving the screen. The minus sign is U+2212; `+` is escaped because a Maestro
+# `text` match is a regex. Descriptions are ASCII because Maestro can't type other text on Android.
+appId: com.thanhwoe.gop
+---
+- runFlow: subflows/fresh-start.yaml
+- runFlow: subflows/new-email.yaml
+- runFlow: subflows/sign-in.yaml
+- evalScript: ${output.groupName = 'Da Lat'}
+- runFlow: subflows/create-group.yaml
+# The script reads the group from the API, so wait until the app has created it.
+- assertVisible:
+    id: group-name
+    text: Da Lat
+- runScript: scripts/other-member-expense.js
+- tapOn:
+    id: group-row
+- assertVisible:
+    id: balances-section
+- assertVisible:
+    id: balance-row
+- assertVisible: Bạn
+- assertVisible: −20.000 ₫
+- assertVisible: ${output.otherEmail}
+- assertVisible: \+20.000 ₫
+- assertVisible:
+    id: payment-line
+    text: Bạn trả ${output.otherEmail} 20.000 ₫
+- assertNotVisible:
+    id: balances-settled
+- evalScript: ${output.platform = maestro.platform.toLowerCase()}
+- takeScreenshot: ${output.platform}-balances
+- tapOn:
+    id: add-expense
+- tapOn:
+    id: expense-amount-input
+- inputText: "60000"
+- tapOn:
+    id: expense-description-input
+- inputText: Cafe
+- pressKey: Enter
+- tapOn:
+    id: save-expense
+- assertNotVisible:
+    id: expense-amount-input
+- assertVisible:
+    id: payment-line
+    text: ${output.otherEmail} trả Bạn 10.000 ₫
+- assertVisible: \+10.000 ₫
+- assertVisible: −10.000 ₫
+- assertVisible:
+    id: group-title
+    text: Da Lat
+- takeScreenshot: ${output.platform}-balances-after-save

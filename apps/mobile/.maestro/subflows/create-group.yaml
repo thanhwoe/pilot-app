@@ -1,10 +1,14 @@
 # Types ${output.groupName} in the create-group field and taps "Tạo nhóm".
+# Enter, not `hideKeyboard`, closes the keyboard: the field is single-line with no
+# `onSubmitEditing`, so Enter only blurs it. On Android `hideKeyboard` presses Back, which leaves
+# the app when the emulator shows no soft keyboard; on iOS it failed on the group screen once the
+# balances made it longer (#138).
 appId: com.thanhwoe.gop
 ---
 - tapOn:
     id: group-name-input
 - inputText: ${output.groupName}
-- hideKeyboard
+- pressKey: Enter
 - tapOn:
     id: create-group
     text: Tạo nhóm

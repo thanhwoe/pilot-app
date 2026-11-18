@@ -24,7 +24,7 @@ appId: com.thanhwoe.gop
 - tapOn:
     id: expense-description-input
 - inputText: An toi
-- hideKeyboard
+- pressKey: Enter
 - evalScript: ${output.platform = maestro.platform.toLowerCase()}
 - takeScreenshot: ${output.platform}-add-form
 - tapOn:
@@ -50,7 +50,7 @@ appId: com.thanhwoe.gop
 - tapOn:
     id: expense-description-input
 - inputText: Taxi
-- hideKeyboard
+- pressKey: Enter
 - tapOn:
     id: save-expense
 - assertNotVisible:
