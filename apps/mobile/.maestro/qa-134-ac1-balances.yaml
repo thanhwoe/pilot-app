@@ -1,6 +1,8 @@
 # #134 QA AC 1, 2, 3, 4: a new group is settled; after An pays 100000 split with a member the
 # balances section shows "Bạn +50.000 ₫" and a payment line. Needs a second member: QA guess,
 # the invite subflows decide how; this flow checks the single-member parts (AC 3, AC 4 figures).
+# A row's label and amount are separate texts, so `id` with `text` on the row never matches:
+# assert the row's id and each text on its own (as the dev's balances flows do).
 appId: com.thanhwoe.gop
 ---
 - runFlow: subflows/fresh-start.yaml
@@ -15,7 +17,8 @@ appId: com.thanhwoe.gop
     text: Đã cân bằng
 - assertVisible:
     id: balance-row
-    text: .*0 ₫.*
+- assertVisible: Bạn
+- assertVisible: 0 ₫
 - assertNotVisible:
     id: payment-line
 - tapOn:
@@ -32,5 +35,9 @@ appId: com.thanhwoe.gop
 - assertNotVisible:
     id: expense-amount-input
 - assertVisible:
+    id: balances-settled
+    text: Đã cân bằng
+- assertVisible:
     id: balance-row
-    text: .*Bạn.*0 ₫.*
+- assertVisible: Bạn
+- assertVisible: 0 ₫
