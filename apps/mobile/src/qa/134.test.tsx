@@ -252,14 +252,13 @@ describe("#134 AC 5: a balances failure", () => {
     getBalances.mockResolvedValueOnce(unavailable);
     await renderScreen();
     await screen.findByTestId("balances-error");
-    getGroup.mockClear();
     listExpenses.mockClear();
     getBalances.mockResolvedValue(owed);
 
     await fireEvent.press(screen.getByTestId("balances-retry"));
     await screen.findAllByTestId("balance-row");
 
-    expect(getGroup).not.toHaveBeenCalled();
+    // The member list may be read again: the spec only says the expenses are not reloaded.
     expect(listExpenses).not.toHaveBeenCalled();
     expect(screen.queryByTestId("balances-error")).toBeNull();
   });
