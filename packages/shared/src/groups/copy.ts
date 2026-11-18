@@ -47,3 +47,16 @@ export const expensesCopy = {
   unavailable: groupsCopy.unavailable,
   retry: groupsCopy.retry,
 } as const;
+
+/** The balances section on the group screen (#134). Tests check these exact strings. */
+export const balancesCopy = {
+  title: "Số dư",
+  settled: "Đã cân bằng",
+  loading: "Đang tải số dư…",
+  /** For a user the member list doesn't have, so a debt is never dropped. */
+  otherMember: "Thành viên khác",
+  me: "Bạn",
+  pays: (from: string, to: string, amount: string) => `${from} trả ${to} ${amount}`,
+  unavailable: groupsCopy.unavailable,
+  retry: groupsCopy.retry,
+} as const;
