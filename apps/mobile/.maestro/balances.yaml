@@ -40,7 +40,7 @@ appId: com.thanhwoe.gop
 - tapOn:
     id: expense-description-input
 - inputText: Cafe
-- hideKeyboard
+- pressKey: Enter
 - tapOn:
     id: save-expense
 - assertNotVisible:

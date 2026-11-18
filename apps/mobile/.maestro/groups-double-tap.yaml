@@ -13,7 +13,7 @@ appId: com.thanhwoe.gop
 - tapOn:
     id: group-name-input
 - inputText: Hoi An
-- hideKeyboard
+- pressKey: Enter
 - doubleTapOn:
     id: create-group
     text: Tạo nhóm

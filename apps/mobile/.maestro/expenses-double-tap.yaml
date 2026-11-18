@@ -22,7 +22,7 @@ appId: com.thanhwoe.gop
 - tapOn:
     id: expense-description-input
 - inputText: Ve xe
-- hideKeyboard
+- pressKey: Enter
 - doubleTapOn:
     id: save-expense
 - assertVisible:

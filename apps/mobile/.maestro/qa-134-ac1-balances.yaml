@@ -29,7 +29,7 @@ appId: com.thanhwoe.gop
 - tapOn:
     id: expense-description-input
 - inputText: An toi
-- hideKeyboard
+- pressKey: Enter
 - tapOn:
     id: save-expense
 - assertNotVisible:
