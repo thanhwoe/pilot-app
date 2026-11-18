@@ -8,6 +8,9 @@ name: Factory stages
 #   GitHub's closing issues, not the PR's text (ADR-013 there for QA).
 # `mac-build`, which a cloud build adds when it stops at a `mac` step, starts a second scheduled
 #   task on the Mac mini instead (docs/routines/mac-build.md, ADR-015 there).
+# When a factory PR's checks fail (a `feat/` or `fix/` branch that closes an issue), the last of its
+#   CI, PR evidence and Mobile E2E runs to finish starts `fix <PR>`: on the Mac mini when Mobile E2E
+#   failed, else in the cloud (ADR-016 there). One fire per push, whichever run finishes last.
 # It filters here, so other events start no session. The secrets keep their first names.
 
 on:
@@ -15,6 +18,9 @@ on:
     types: [labeled]
   pull_request:
     types: [opened, closed]
+  workflow_run:
+    workflows: ["CI", "PR evidence", "Mobile E2E"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -22,7 +28,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: factory-stages-${{ github.event.issue.number || github.event.pull_request.number }}
+  group: factory-stages-${{ github.event.issue.number || github.event.pull_request.number || github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
@@ -34,7 +40,11 @@ jobs:
         (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           (github.event.pull_request.merged ||
-            (github.event.action == 'opened' && !startsWith(github.event.pull_request.head.ref, 'qa/')))))
+            (github.event.action == 'opened' && !startsWith(github.event.pull_request.head.ref, 'qa/')))) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          (startsWith(github.event.workflow_run.head_branch, 'feat/') ||
+            startsWith(github.event.workflow_run.head_branch, 'fix/'))))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,6 +57,9 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           ACTION: ${{ github.event.action }}
           HAS_QA: ${{ contains(github.event.issue.labels.*.name, 'qa') }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -76,6 +89,28 @@ jobs:
                 fi
               else
                 text="retro $n"
+              fi
+              ;;
+            workflow_run:*)
+              # Once per push: the last of the PR's check workflows to finish decides, and fires
+              # only if one of them failed. A run that finishes earlier leaves it to that one.
+              runs=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA&event=pull_request&per_page=100" \
+                --jq '[.workflow_runs[] | select(.name == "CI" or .name == "PR evidence" or .name == "Mobile E2E")]')
+              pr=${RUN_PR:-$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty')}
+              if jq -e 'any(.[]; .status != "completed")' <<<"$runs" >/dev/null; then
+                echo "::notice::Another check is still running on $SHA; the last one to finish decides."
+              elif [ "$(jq -r 'max_by(.updated_at) | .id' <<<"$runs")" != "$RUN_ID" ]; then
+                echo "::notice::Another check finished later on $SHA; it decides."
+              elif ! jq -e 'any(.[]; .conclusion == "failure")' <<<"$runs" >/dev/null; then
+                echo "::notice::No check failed on $SHA."
+              elif [ -z "$pr" ]; then
+                echo "::notice::No open PR for $SHA."
+              elif [ -z "$(gh pr view "$pr" --repo "$REPO" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')" ]; then
+                echo "::notice::PR #$pr closes no issue, so it isn't a factory PR to fix."
+              else
+                text="fix $pr"
+                # Maestro needs the Simulator: a failed Mobile E2E goes to the Mac mini.
+                jq -e 'any(.[]; .name == "Mobile E2E" and .conclusion == "failure")' <<<"$runs" >/dev/null && routine=mac
               fi
               ;;
           esac

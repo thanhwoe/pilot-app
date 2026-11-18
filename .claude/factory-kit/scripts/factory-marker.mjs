@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const STAGES = ['capture', 'intake', 'spec', 'plan', 'qa', 'handover', 'retro'];
+export const STAGES = ['capture', 'intake', 'spec', 'plan', 'qa', 'handover', 'ci-fix', 'retro'];
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const FIXED = ['stage', 'issue', 'kit'];
 const MARKER = /<!-- factory-kit (\{.*\}) -->/g;

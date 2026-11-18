@@ -24,6 +24,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # v5 turns on the pnpm cache from package.json by itself, and fails because this job
+          # never installs pnpm: lint-spec.mjs needs only Node.
+          package-manager-cache: false
       - name: Lint the changed specs and plans
         env:
           BEFORE: ${{ github.event.before }}
