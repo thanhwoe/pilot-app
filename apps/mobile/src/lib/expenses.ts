@@ -1,6 +1,8 @@
 import {
+  type BalancesState,
   expensesCopy,
   type GroupScreenState,
+  loadBalances,
   loadGroupScreen,
   type SaveExpenseOutcome,
   submitExpense,
@@ -39,4 +41,10 @@ export async function saveMyExpense(values: {
     return { saved: false, error: expensesCopy.unavailable };
   }
   return submitExpense(groupsApi, token, values);
+}
+
+/** The group's balances with their own member list; `signed-out` when the API rejected the session. */
+export async function loadMyBalances(groupId: string): Promise<BalancesState> {
+  const token = await readToken();
+  return token ? loadBalances(groupsApi, token, groupId) : { kind: "unavailable" };
 }

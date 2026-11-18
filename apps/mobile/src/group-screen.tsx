@@ -1,4 +1,7 @@
 import {
+  type BalancesState,
+  balanceRows,
+  balancesCopy,
   EXPENSE_DESCRIPTION_MAX_LENGTH,
   type Expense,
   expensesCopy,
@@ -6,14 +9,16 @@ import {
   formatExpenseDate,
   formatVnd,
   type GroupDetailResponse,
+  isBalancesSignedOut,
   isSaveExpenseSignedOut,
   isScreenSignedOut,
   parseAmountInput,
   payerLine,
+  paymentLines,
 } from "@gop/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { loadMyGroupScreen, saveMyExpense } from "@/lib/expenses";
+import { loadMyBalances, loadMyGroupScreen, saveMyExpense } from "@/lib/expenses";
 import { useSession } from "@/lib/session";
 import { useSessionGuard } from "@/lib/session-guard";
 
@@ -37,6 +42,21 @@ export function GroupScreen({ groupId }: { groupId: string }) {
   const retrying = useRef(false);
   // Counts the loads, so only the answer to the one that started last is shown.
   const latestLoad = useRef(0);
+  // The balances have their own state and load: a failure of one part must not hide the other
+  // (#134). `null` is the loading line, and no figures are kept while loading or after a failure.
+  const [balances, setBalances] = useState<BalancesState | null>(null);
+  const retryingBalances = useRef(false);
+  const latestBalancesLoad = useRef(0);
+
+  const loadBalancesNow = useCallback(async () => {
+    const thisLoad = ++latestBalancesLoad.current;
+    setBalances(null);
+    const answer = await guard(() => loadMyBalances(groupId), isBalancesSignedOut);
+    if (!answer || thisLoad !== latestBalancesLoad.current) {
+      return;
+    }
+    setBalances(answer);
+  }, [guard, groupId]);
 
   const load = useCallback(async () => {
     const thisLoad = ++latestLoad.current;
@@ -65,6 +85,22 @@ export function GroupScreen({ groupId }: { groupId: string }) {
     }
     load();
   }, [load]);
+
+  useEffect(() => {
+    loadBalancesNow();
+  }, [loadBalancesNow]);
+
+  async function retryBalances() {
+    if (retryingBalances.current) {
+      return;
+    }
+    retryingBalances.current = true;
+    try {
+      await loadBalancesNow();
+    } finally {
+      retryingBalances.current = false;
+    }
+  }
 
   async function retry() {
     if (retrying.current) {
@@ -101,6 +137,7 @@ export function GroupScreen({ groupId }: { groupId: string }) {
           {screen.group.name}
         </Text>
       )}
+      {myId && <BalancesSection state={balances} myId={myId} onRetry={retryBalances} />}
       {(screen === null || reload === "running") && (
         <Text testID="expenses-loading">{expensesCopy.loading}</Text>
       )}
@@ -123,7 +160,7 @@ export function GroupScreen({ groupId }: { groupId: string }) {
               memberIds={screen.group.members.map((member) => member.userId)}
               onSaved={async () => {
                 // No insert of our own: the list is what the API says after the save.
-                await load();
+                await Promise.all([load(), loadBalancesNow()]);
                 setAdding(false);
               }}
             />
@@ -158,6 +195,59 @@ export function GroupScreen({ groupId }: { groupId: string }) {
         </>
       )}
     </ScrollView>
+  );
+}
+
+/** Each member's balance and who pays whom, or the loading line, or the error with its retry. */
+function BalancesSection({
+  state,
+  myId,
+  onRetry,
+}: {
+  state: BalancesState | null;
+  myId: string;
+  onRetry: () => void;
+}) {
+  const loaded = state?.kind === "loaded" ? state : null;
+  const rows = loaded ? balanceRows(loaded.balances.balances, myId, loaded.members) : [];
+  const lines = loaded ? paymentLines(loaded.balances.suggestions, myId, loaded.members) : [];
+  return (
+    <View testID="balances-section" style={styles.form}>
+      <Text style={styles.sectionTitle} accessibilityRole="header">
+        {balancesCopy.title}
+      </Text>
+      {state === null && <Text testID="balances-loading">{balancesCopy.loading}</Text>}
+      {state?.kind === "unavailable" && (
+        <>
+          <Text testID="balances-error" style={styles.error}>
+            {balancesCopy.unavailable}
+          </Text>
+          <Pressable testID="balances-retry" style={styles.button} onPress={onRetry}>
+            <Text style={styles.buttonText}>{balancesCopy.retry}</Text>
+          </Pressable>
+        </>
+      )}
+      {loaded && (
+        <>
+          {lines.length === 0 && (
+            <Text testID="balances-settled" style={styles.muted}>
+              {balancesCopy.settled}
+            </Text>
+          )}
+          {rows.map((row) => (
+            <View key={row.userId} testID="balance-row" style={styles.row}>
+              <Text style={[styles.description, styles.rowText]}>{row.label}</Text>
+              <Text style={styles.description}>{row.amount}</Text>
+            </View>
+          ))}
+          {lines.map((line) => (
+            <Text key={`${line.from}-${line.to}`} testID="payment-line" style={styles.description}>
+              {line.text}
+            </Text>
+          ))}
+        </>
+      )}
+    </View>
   );
 }
 
@@ -258,6 +348,7 @@ function ExpenseForm({
 const styles = StyleSheet.create({
   container: { flexGrow: 1, gap: 12, padding: 24 },
   title: { fontSize: 24, fontWeight: "700" },
+  sectionTitle: { fontSize: 18, fontWeight: "600" },
   error: { color: "#cf222e" },
   button: { alignSelf: "flex-start", backgroundColor: "#171717", borderRadius: 6, padding: 12 },
   buttonText: { color: "#fff", fontSize: 16 },
