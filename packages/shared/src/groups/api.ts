@@ -6,6 +6,7 @@ import {
   type Fetch,
   postJson,
 } from "../api-client";
+import { type BalancesResponse, balancesResponseSchema } from "../balances";
 import {
   type CreateExpenseBody,
   type ExpenseListResponse,
@@ -46,6 +47,8 @@ export interface GroupsApi {
   getGroup(token: string, groupId: string): Promise<ApiResult<GroupDetailResponse>>;
   /** The group's expenses, newest first (#97). */
   listExpenses(token: string, groupId: string): Promise<ApiResult<ExpenseListResponse>>;
+  /** Every member's balance and the payments that settle the group (#96, #134). */
+  getBalances(token: string, groupId: string): Promise<ApiResult<BalancesResponse>>;
   /** Records an expense, split equally between the members in the body (#97). */
   createExpense(
     token: string,
@@ -102,6 +105,12 @@ export function createGroupsApi(
         `/groups/${encodeURIComponent(groupId)}/expenses`,
         { headers: bearer(token) },
         expenseListResponseSchema,
+      ),
+    getBalances: (token, groupId) =>
+      call(
+        `/groups/${encodeURIComponent(groupId)}/balances`,
+        { headers: bearer(token) },
+        balancesResponseSchema,
       ),
     createExpense: (token, groupId, body) =>
       call(

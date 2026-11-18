@@ -4,10 +4,12 @@ import type { GroupsApi } from "./api";
 import { groupsCopy } from "./copy";
 import {
   acceptInvite,
+  isBalancesSignedOut,
   isCreateSignedOut,
   isListSignedOut,
   isSaveExpenseSignedOut,
   isScreenSignedOut,
+  loadBalances,
   loadGroupScreen,
   loadGroups,
   makeInviteLink,
@@ -46,6 +48,14 @@ const expense = {
   ],
 };
 
+const balancesAnswer = {
+  balances: [
+    { userId: me, balance: 45000 },
+    { userId: bao, balance: -45000 },
+  ],
+  suggestions: [{ from: bao, to: me, amount: 45000 }],
+};
+
 function fakeApi(overrides: Partial<GroupsApi> = {}): GroupsApi {
   return {
     listGroups: vi.fn(async () => ({ ok: true as const, data: { groups: [listItem] } })),
@@ -59,6 +69,7 @@ function fakeApi(overrides: Partial<GroupsApi> = {}): GroupsApi {
     getGroup: vi.fn(async () => ({ ok: true as const, data: detail })),
     listExpenses: vi.fn(async () => ({ ok: true as const, data: { expenses: [expense] } })),
     createExpense: vi.fn(async () => ({ ok: true as const, data: expense })),
+    getBalances: vi.fn(async () => ({ ok: true as const, data: balancesAnswer })),
     ...overrides,
   };
 }
@@ -424,6 +435,43 @@ describe("submitExpense", () => {
         error: "Không kết nối được máy chủ. Hãy thử lại.",
       });
       expect(isSaveExpenseSignedOut(outcome)).toBe(false);
+    },
+  );
+});
+
+describe("loadBalances", () => {
+  it("#134 AC 1, 5: returns the balances and its own member list", async () => {
+    const api = fakeApi();
+
+    expect(await loadBalances(api, "t0ken", group.id)).toEqual({
+      kind: "loaded",
+      balances: balancesAnswer,
+      members,
+    });
+    expect(api.getBalances).toHaveBeenCalledWith("t0ken", group.id);
+    expect(api.getGroup).toHaveBeenCalledWith("t0ken", group.id);
+    expect(api.listExpenses).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["the balances", "getBalances"],
+    ["the group", "getGroup"],
+  ] as const)("[security] #134 AC 6: reads unauthorized on %s as signed out", async (_w, call) => {
+    const api = fakeApi({ [call]: failed("unauthorized") });
+    const state = await loadBalances(api, "t0ken", group.id);
+
+    expect(state).toEqual({ kind: "signed-out" });
+    expect(isBalancesSignedOut(state)).toBe(true);
+  });
+
+  it.each([["unavailable"], ["not_found"], ["invalid_request"]] as const)(
+    "#134 AC 5, 6: reads %s as unavailable, not signed out",
+    async (error) => {
+      const api = fakeApi({ getBalances: failed(error) });
+      const state = await loadBalances(api, "t0ken", group.id);
+
+      expect(state).toEqual({ kind: "unavailable" });
+      expect(isBalancesSignedOut(state)).toBe(false);
     },
   );
 });
