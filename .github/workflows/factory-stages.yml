@@ -88,14 +88,23 @@ jobs:
       - name: Fire the routine
         if: steps.stage.outputs.text != ''
         env:
-          # `mac-build` goes to the Mac mini's task, everything else to the cloud one.
-          FIRE_URL: ${{ steps.stage.outputs.routine == 'mac' && secrets.MAC_BUILD_FIRE_URL || secrets.INTAKE_SPEC_FIRE_URL }}
-          FIRE_TOKEN: ${{ steps.stage.outputs.routine == 'mac' && secrets.MAC_BUILD_FIRE_TOKEN || secrets.INTAKE_SPEC_FIRE_TOKEN }}
+          # Picked in the script, not with `a && b || c`: that falls back to the cloud task's secrets
+          # when the Mac mini's are empty, and sent #134's `mac-build` to the cloud.
+          STAGES_URL: ${{ secrets.INTAKE_SPEC_FIRE_URL }}
+          STAGES_TOKEN: ${{ secrets.INTAKE_SPEC_FIRE_TOKEN }}
+          MAC_URL: ${{ secrets.MAC_BUILD_FIRE_URL }}
+          MAC_TOKEN: ${{ secrets.MAC_BUILD_FIRE_TOKEN }}
           ROUTINE: ${{ steps.stage.outputs.routine }}
           TEXT: ${{ steps.stage.outputs.text }}
           # The /fire endpoint is in research preview; a breaking change ships under a new header.
           ROUTINE_BETA: experimental-cc-routine-2026-04-01
         run: |
+          # `mac-build` goes to the Mac mini's task, everything else to the cloud one.
+          if [ "$ROUTINE" = mac ]; then
+            FIRE_URL=$MAC_URL FIRE_TOKEN=$MAC_TOKEN
+          else
+            FIRE_URL=$STAGES_URL FIRE_TOKEN=$STAGES_TOKEN
+          fi
           if [ -z "$FIRE_URL" ] || [ -z "$FIRE_TOKEN" ]; then
             if [ "$ROUTINE" = mac ]; then
               echo "::warning::MAC_BUILD_FIRE_URL or MAC_BUILD_FIRE_TOKEN is not set, so the Mac mini build didn't start. Run /factory-build with --from on the Mac mini."
