@@ -24,7 +24,10 @@ const unauthorized: ErrorResponse = { error: "unauthorized" };
 /** One body for a group I'm not in, a group that doesn't exist and a malformed id. */
 const notFound: ErrorResponse = { error: "not_found" };
 
+const forbidden: ErrorResponse = { error: "forbidden" };
+
 const groupIdSchema = z.uuid();
+const expenseIdSchema = z.uuid();
 
 function toResponse(expense: StoredExpense): ExpenseResponse {
   return { ...expense, createdAt: expense.createdAt.toISOString() };
@@ -114,4 +117,38 @@ export function registerExpenseRoutes(app: FastifyInstance, deps: ExpenseDeps) {
     const response: BalancesResponse = { balances, suggestions: suggestSettlements(balances) };
     return response;
   });
+
+  // Checks run in this order: session (401), group and membership (404), expense in that group
+  // (404), then that the caller paid it (403). A member already sees the expense in the list, so
+  // the 403 leaks nothing.
+  app.delete<{ Params: { id: string; expenseId: string } }>(
+    "/groups/:id/expenses/:expenseId",
+    async (request, reply) => {
+      const session = await findSession(request);
+      if (!session) {
+        return reply.code(401).send(unauthorized);
+      }
+      const group = await findGroup(session.user.id, request.params.id);
+      if (!group) {
+        return reply.code(404).send(notFound);
+      }
+      const expenseId = expenseIdSchema.safeParse(request.params.expenseId);
+      if (!expenseId.success) {
+        return reply.code(404).send(notFound);
+      }
+      const expenses = await expenseStore.listExpenses(group.id);
+      const expense = expenses.find((candidate) => candidate.id === expenseId.data);
+      if (!expense) {
+        return reply.code(404).send(notFound);
+      }
+      if (expense.payerId !== session.user.id) {
+        return reply.code(403).send(forbidden);
+      }
+      // False: another delete won the race, so the expense is gone, as for a second DELETE.
+      if (!(await expenseStore.deleteExpense(group.id, expense.id))) {
+        return reply.code(404).send(notFound);
+      }
+      return reply.code(204).send();
+    },
+  );
 }
