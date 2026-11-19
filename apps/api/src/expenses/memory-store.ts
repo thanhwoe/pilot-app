@@ -35,5 +35,16 @@ export function createMemoryExpenseStore(): ExpenseStore {
         )
         .map(copy);
     },
+
+    async deleteExpense(groupId, expenseId) {
+      const index = stored.findIndex(
+        (expense) => expense.id === expenseId && expense.groupId === groupId,
+      );
+      if (index < 0) {
+        return false;
+      }
+      stored.splice(index, 1);
+      return true;
+    },
   };
 }

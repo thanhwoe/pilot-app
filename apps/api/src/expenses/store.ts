@@ -1,5 +1,5 @@
 import type { ExpenseShare } from "@gop/shared";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { expenseShares, expenses } from "../db/schema";
 
@@ -31,6 +31,10 @@ export interface ExpenseStore {
   addExpense(expense: NewExpense): Promise<StoredExpense>;
   /** A group's expenses, newest first; ties in creation time go by id, descending. */
   listExpenses(groupId: string): Promise<StoredExpense[]>;
+  /**
+   * Deletes the expense when it belongs to that group, with its shares, and says whether it did.
+   */
+  deleteExpense(groupId: string, expenseId: string): Promise<boolean>;
 }
 
 export const byUserId = (a: ExpenseShare, b: ExpenseShare) =>
@@ -81,6 +85,15 @@ export function createPostgresExpenseStore(db: Database["db"]): ExpenseStore {
           .map(({ userId, amount }) => ({ userId, amount }))
           .sort(byUserId),
       }));
+    },
+
+    async deleteExpense(groupId, expenseId) {
+      // One statement: the shares go by ON DELETE CASCADE in the same statement.
+      const rows = await db
+        .delete(expenses)
+        .where(and(eq(expenses.id, expenseId), eq(expenses.groupId, groupId)))
+        .returning({ id: expenses.id });
+      return rows.length > 0;
     },
   };
 }
