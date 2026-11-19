@@ -4,6 +4,7 @@ import {
   codeExpiresAt,
   codeRequestWindowStart,
   emailSchema,
+  errorResponseSchema,
   isCodeUsable,
   isSessionValid,
   requestCodeBodySchema,
@@ -95,5 +96,11 @@ describe("isSessionValid", () => {
     const session = { expiresAt: sessionExpiresAt(now) };
     expect(isSessionValid(session, plus(30 * 24 * 60 * minute - 1))).toBe(true);
     expect(isSessionValid(session, plus(30 * 24 * 60 * minute))).toBe(false);
+  });
+});
+
+describe("errorResponseSchema", () => {
+  it("#145 AC 3: accepts forbidden", () => {
+    expect(errorResponseSchema.safeParse({ error: "forbidden" }).success).toBe(true);
   });
 });
