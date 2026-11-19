@@ -11,6 +11,8 @@ name: Factory stages
 # When a factory PR's checks fail (a `feat/` or `fix/` branch that closes an issue), the last of its
 #   CI, PR evidence and Mobile E2E runs to finish starts `fix <PR>`: on the Mac mini when Mobile E2E
 #   failed, else in the cloud (ADR-016 there). One fire per push, whichever run finishes last.
+#   It counts ci-fix's tries first, with the kit's own script: none after two, none on a commit a
+#   try already judged (solo-factory#43).
 # It filters here, so other events start no session. The secrets keep their first names.
 
 on:
@@ -48,6 +50,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Only the kit's scripts, from the default branch: ci-fix's tries are counted with them.
+      - if: github.event_name == 'workflow_run'
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .claude/factory-kit
+          persist-credentials: false
       - name: Pick the stage
         id: stage
         env:
@@ -105,12 +113,27 @@ jobs:
                 echo "::notice::No check failed on $SHA."
               elif [ -z "$pr" ]; then
                 echo "::notice::No open PR for $SHA."
-              elif [ -z "$(gh pr view "$pr" --repo "$REPO" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')" ]; then
-                echo "::notice::PR #$pr closes no issue, so it isn't a factory PR to fix."
               else
-                text="fix $pr"
-                # Maestro needs the Simulator: a failed Mobile E2E goes to the Mac mini.
-                jq -e 'any(.[]; .name == "Mobile E2E" and .conclusion == "failure")' <<<"$runs" >/dev/null && routine=mac
+                # The issue it closes, in this repository only, as for retro.
+                n=$(gh pr view "$pr" --repo "$REPO" --json closingIssuesReferences \
+                  --jq "[.closingIssuesReferences[] | select(.url | startswith(\"https://github.com/$REPO/issues/\")) | .number] | first // empty")
+                if [ -z "$n" ]; then
+                  echo "::notice::PR #$pr closes no issue, so it isn't a factory PR to fix."
+                else
+                  # ci-fix's tries, counted from its markers on the issue the way the skill counts.
+                  comments="$RUNNER_TEMP/comments-$n.ndjson"
+                  gh api --paginate "repos/$REPO/issues/$n/comments" --jq '.[]' > "$comments"
+                  tries=$(node .claude/factory-kit/scripts/factory-marker.mjs tries "$comments" "$pr" "$SHA")
+                  if [ "$(jq .tries <<<"$tries")" -ge 2 ]; then
+                    echo "::notice::ci-fix has made two tries on PR #$pr, and the second one handed over."
+                  elif jq -e .sha_tried <<<"$tries" >/dev/null; then
+                    echo "::notice::A ci-fix try already judged $SHA on PR #$pr."
+                  else
+                    text="fix $pr"
+                    # Maestro needs the Simulator: a failed Mobile E2E goes to the Mac mini.
+                    jq -e 'any(.[]; .name == "Mobile E2E" and .conclusion == "failure")' <<<"$runs" >/dev/null && routine=mac
+                  fi
+                fi
               fi
               ;;
           esac

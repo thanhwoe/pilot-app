@@ -13,6 +13,10 @@
 //   node factory-marker.mjs body <issue file>
 //       prints {"marker":{…}|null,"untrusted":bool} for the marker in an issue's body
 //       (`gh api …/issues/<N> > <file>`), counted on the same terms.
+//   node factory-marker.mjs tries <comments file> <pr> [<sha>]
+//       prints {"tries":n,"sha_tried":bool}: the ci-fix tries on that PR, and whether one of them
+//       already judged commit <sha>. The ci-fix skill and the Factory stages workflow both count
+//       with it, so the workflow fires no try the skill would refuse (solo-factory#43).
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -94,8 +98,19 @@ export const bodyMarker = (issue) => {
   return { marker, untrusted: false };
 };
 
+/**
+ * The ci-fix tries on one PR, from markers `readMarkers` already trusted. A marker that says it
+ * handed over (kit 0.39.0's third comment) is no try. `sha_tried`: a try already judged this commit.
+ */
+export const ciFixTries = (markers, pr, sha) => {
+  const tries = markers.filter(
+    (m) => m.stage === 'ci-fix' && String(m.pr) === String(pr) && m.result !== 'handed over',
+  );
+  return { tries: tries.length, sha_tried: sha !== undefined && tries.some((m) => m.sha === sha) };
+};
+
 const USAGE =
-  "usage: factory-marker.mjs line <stage> <issue|-> ['<json fields>'] | read <comments file> | body <issue file>";
+  "usage: factory-marker.mjs line <stage> <issue|-> ['<json fields>'] | read <comments file> | body <issue file> | tries <comments file> <pr> [<sha>]";
 
 const main = () => {
   const [command, ...args] = process.argv.slice(2);
@@ -117,6 +132,12 @@ const main = () => {
   }
   if (command === 'read' && args.length === 1) {
     console.log(JSON.stringify(readMarkers(parseComments(readFileSync(args[0], 'utf8')))));
+    return;
+  }
+  if (command === 'tries' && (args.length === 2 || args.length === 3)) {
+    if (!/^\d+$/.test(args[1])) throw new UsageError('pr must be a number');
+    const { markers } = readMarkers(parseComments(readFileSync(args[0], 'utf8')));
+    console.log(JSON.stringify(ciFixTries(markers, args[1], args[2])));
     return;
   }
   if (command === 'body' && args.length === 1) {
