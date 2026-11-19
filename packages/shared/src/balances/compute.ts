@@ -8,14 +8,27 @@ export interface BalanceExpense {
   shares: ExpenseShare[];
 }
 
+/** A recorded payment from one member to another: it moves their balances toward 0. */
+export interface BalanceSettlement {
+  payerId: string;
+  payeeId: string;
+  amount: number;
+}
+
 const compareIds = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * Each member's balance over a group's expenses: what they paid minus the sum of their shares.
- * It covers `memberIds` and anyone an expense names, so the balances always add up to exactly 0.
+ * A settlement raises the payer's balance and lowers the payee's by its amount.
+ * It covers `memberIds` and anyone an expense or settlement names, so the balances always add up
+ * to exactly 0.
  * The result is ordered by user id, whatever order the expenses came in.
  */
-export function computeBalances(memberIds: string[], expenses: BalanceExpense[]): MemberBalance[] {
+export function computeBalances(
+  memberIds: string[],
+  expenses: BalanceExpense[],
+  settlements: BalanceSettlement[] = [],
+): MemberBalance[] {
   const balances = new Map<string, number>(memberIds.map((userId) => [userId, 0]));
   const add = (userId: string, amount: number) =>
     balances.set(userId, (balances.get(userId) ?? 0) + amount);
@@ -25,6 +38,11 @@ export function computeBalances(memberIds: string[], expenses: BalanceExpense[])
     for (const share of shares) {
       add(share.userId, -share.amount);
     }
+  }
+
+  for (const { payerId, payeeId, amount } of settlements) {
+    add(payerId, amount);
+    add(payeeId, -amount);
   }
 
   return [...balances]

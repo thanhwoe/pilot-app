@@ -212,5 +212,56 @@ export function describeExpenseStoreContract(
       expect(await store.deleteExpense(groupId, expense.id)).toBe(true);
       expect(await store.deleteExpense(groupId, expense.id)).toBe(false);
     });
+
+    it("#148 AC 2: stores a settlement with its group, payer, payee, amount and time", async () => {
+      const { ana, bao, groupId } = await setup();
+
+      const settlement = await store.addSettlement({
+        groupId,
+        payerId: bao,
+        payeeId: ana,
+        amount: 20_000,
+        now: t0,
+      });
+
+      expect(settlement).toEqual({
+        id: expect.any(String),
+        groupId,
+        payerId: bao,
+        payeeId: ana,
+        amount: 20_000,
+        createdAt: t0,
+      });
+      expect(await store.listSettlements(groupId)).toEqual([settlement]);
+    });
+
+    it("#148 AC 3: lists only that group's settlements, oldest first", async () => {
+      const { ana, bao, cy, groupId } = await setup();
+      const other = await setup();
+      const second = await store.addSettlement({
+        groupId,
+        payerId: cy,
+        payeeId: ana,
+        amount: 5_000,
+        now: at(minute),
+      });
+      const first = await store.addSettlement({
+        groupId,
+        payerId: bao,
+        payeeId: ana,
+        amount: 20_000,
+        now: t0,
+      });
+      await store.addSettlement({
+        groupId: other.groupId,
+        payerId: other.bao,
+        payeeId: other.ana,
+        amount: 1_000,
+        now: t0,
+      });
+
+      expect(await store.listSettlements(groupId)).toEqual([first, second]);
+      expect(await store.listSettlements(randomUUID())).toEqual([]);
+    });
   });
 }

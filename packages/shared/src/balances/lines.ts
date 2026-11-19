@@ -32,11 +32,12 @@ export function balanceRows(balances: MemberBalance[], myId: string, members: Me
   }));
 }
 
-/** One line per suggested payment: "<email> trả Bạn 50.000 ₫". */
+/** One line per suggested payment: "<email> trả Bạn 50.000 ₫". `amount` is what the line says, in whole VND. */
 export function paymentLines(suggestions: SuggestedPayment[], myId: string, members: Member[]) {
   return suggestions.map(({ from, to, amount }) => ({
     from,
     to,
+    amount,
     text: balancesCopy.pays(
       memberLabel(from, myId, members),
       memberLabel(to, myId, members),

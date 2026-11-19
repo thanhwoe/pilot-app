@@ -155,6 +155,7 @@ describe("createGroupsApi", () => {
 
   describe("#97", () => {
     const me = "6f1c1d2e-8b7a-4c3d-9e0f-1a2b3c4d5e6f";
+    const other = "7a2d2e3f-9c8b-4d4e-8f1a-2b3c4d5e6f70";
     const detail = { ...group, members: [{ userId: me, email: "an@example.com" }] };
     const expense = {
       id: "3d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a",
@@ -219,6 +220,37 @@ describe("createGroupsApi", () => {
       });
     });
 
+    it("#148 AC 2: posts the settlement to /groups/:id/settlements with the bearer token and parses it", async () => {
+      const settlementBody = { payerId: me, payeeId: other, amount: 20_000 };
+      const stored = {
+        id: "5d1c2b3a-4f5e-4a6b-8c7d-9e0f1a2b3c4d",
+        groupId: group.id,
+        ...settlementBody,
+        createdAt: "2026-11-02T10:00:00.000Z",
+      };
+      const fetchFn = fakeFetch(201, stored);
+      const api = createGroupsApi("http://api.test", fetchFn);
+
+      expect(await api.createSettlement("t0ken", group.id, settlementBody)).toEqual({
+        ok: true,
+        data: stored,
+      });
+      expect(fetchFn).toHaveBeenCalledWith(`http://api.test/groups/${group.id}/settlements`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer t0ken" },
+        body: JSON.stringify(settlementBody),
+        signal: expect.any(AbortSignal),
+      });
+    });
+
+    it("#148: reads a settlement answer that fails the schema as unavailable", async () => {
+      const api = createGroupsApi("http://api.test", fakeFetch(201, { id: "nope" }));
+
+      expect(
+        await api.createSettlement("t0ken", group.id, { payerId: me, payeeId: other, amount: 1 }),
+      ).toEqual({ ok: false, error: "unavailable" });
+    });
+
     it("#134 AC 6: gets /groups/:id/balances with the bearer token and parses it", async () => {
       const answer = {
         balances: [{ userId: me, balance: 5000 }],
@@ -256,6 +288,11 @@ describe("createGroupsApi", () => {
       [
         "createExpense",
         (api: ReturnType<typeof createGroupsApi>) => api.createExpense("t0ken", group.id, body),
+      ],
+      [
+        "createSettlement",
+        (api: ReturnType<typeof createGroupsApi>) =>
+          api.createSettlement("t0ken", group.id, { payerId: me, payeeId: other, amount: 1 }),
       ],
     ])("reads a 401 from %s as unauthorized", async (_name, call) => {
       const api = createGroupsApi("http://api.test", fakeFetch(401, { error: "unauthorized" }));

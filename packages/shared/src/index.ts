@@ -7,4 +7,5 @@ export * from "./groups";
 export * from "./groups/index";
 export * from "./health";
 export * from "./session-guard";
+export * from "./settlements";
 export * from "./sign-in";

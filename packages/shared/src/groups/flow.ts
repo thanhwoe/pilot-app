@@ -13,8 +13,9 @@ import {
   inviteTokenSchema,
 } from "../groups";
 import { guardSession } from "../session-guard";
+import { createSettlementBodySchema } from "../settlements";
 import type { GroupsApi } from "./api";
-import { groupsCopy as copy, expensesCopy } from "./copy";
+import { groupsCopy as copy, expensesCopy, settlementsCopy } from "./copy";
 
 /** What the groups list shows. `signed-out`: the API rejected the session, so the app shows sign-in. */
 export type GroupsState =
@@ -300,4 +301,47 @@ export async function submitExpense(
     return { saved: false, error: expensesCopy.unavailable };
   }
   return { saved: true, expense: result.data };
+}
+
+/** `signedOut`: the API rejected the session, so the app shows sign-in instead of an error. */
+export type RecordSettlementOutcome =
+  | { saved: true }
+  | { saved: false; error: string }
+  | { saved: false; signedOut: true };
+
+/** Recording answered that the API rejected the session. */
+export function isRecordSettlementSignedOut(
+  outcome: RecordSettlementOutcome,
+): outcome is { saved: false; signedOut: true } {
+  return "signedOut" in outcome;
+}
+
+/**
+ * The "Đã trả" button: records that I paid `payeeId` the amount a payment line showed. Whatever
+ * goes wrong other than a rejected session shows one connection error, and nothing is recorded
+ * from the app's side, so the line and its button stay.
+ */
+export async function recordSettlement(
+  api: GroupsApi,
+  token: string,
+  payment: { groupId: string; myId: string; payeeId: string; amount: number },
+): Promise<RecordSettlementOutcome> {
+  const body = createSettlementBodySchema.safeParse({
+    payerId: payment.myId,
+    payeeId: payment.payeeId,
+    amount: payment.amount,
+  });
+  // A payment line always has a whole positive amount between two members, so only a call that was
+  // not built from a line gets here: there is nothing the person can fix.
+  if (!body.success) {
+    return { saved: false, error: settlementsCopy.unavailable };
+  }
+  const result = guardSession(await api.createSettlement(token, payment.groupId, body.data));
+  if (result.kind === "signed-out") {
+    return { saved: false, signedOut: true };
+  }
+  if (result.kind === "failed") {
+    return { saved: false, error: settlementsCopy.unavailable };
+  }
+  return { saved: true };
 }
