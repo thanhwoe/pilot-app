@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { byUserId, type ExpenseStore, type StoredExpense } from "./store";
+import {
+  bySettlementAge,
+  byUserId,
+  type ExpenseStore,
+  type StoredExpense,
+  type StoredSettlement,
+} from "./store";
 
 /**
  * An `ExpenseStore` held in memory, for route tests. The contract suite in `store.contract.ts`
@@ -7,6 +13,7 @@ import { byUserId, type ExpenseStore, type StoredExpense } from "./store";
  */
 export function createMemoryExpenseStore(): ExpenseStore {
   const stored: StoredExpense[] = [];
+  const settled: StoredSettlement[] = [];
 
   const copy = (expense: StoredExpense): StoredExpense => ({
     ...expense,
@@ -45,6 +52,19 @@ export function createMemoryExpenseStore(): ExpenseStore {
       }
       stored.splice(index, 1);
       return true;
+    },
+
+    async addSettlement({ now, ...settlement }) {
+      const added: StoredSettlement = { id: randomUUID(), ...settlement, createdAt: now };
+      settled.push(added);
+      return { ...added };
+    },
+
+    async listSettlements(groupId) {
+      return settled
+        .filter((settlement) => settlement.groupId === groupId)
+        .sort(bySettlementAge)
+        .map((settlement) => ({ ...settlement }));
     },
   };
 }
