@@ -48,6 +48,15 @@ const expense = {
   ],
 };
 
+const settlement = {
+  id: "5d1c2b3a-4f5e-4a6b-8c7d-9e0f1a2b3c4d",
+  groupId: group.id,
+  payerId: bao,
+  payeeId: me,
+  amount: 45000,
+  createdAt: "2026-11-13T10:00:00.000Z",
+};
+
 const balancesAnswer = {
   balances: [
     { userId: me, balance: 45000 },
@@ -70,6 +79,7 @@ function fakeApi(overrides: Partial<GroupsApi> = {}): GroupsApi {
     listExpenses: vi.fn(async () => ({ ok: true as const, data: { expenses: [expense] } })),
     createExpense: vi.fn(async () => ({ ok: true as const, data: expense })),
     getBalances: vi.fn(async () => ({ ok: true as const, data: balancesAnswer })),
+    createSettlement: vi.fn(async () => ({ ok: true as const, data: settlement })),
     ...overrides,
   };
 }
