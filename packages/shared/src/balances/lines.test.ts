@@ -74,6 +74,16 @@ describe("paymentLines", () => {
   });
 });
 
+describe("paymentLines amounts", () => {
+  it("#148: carries each line's payer, payee and amount for the Đã trả button", () => {
+    const lines = paymentLines([{ from: me, to: chi, amount: 20000 }], me, members);
+
+    expect(lines).toEqual([
+      { from: me, to: chi, amount: 20000, text: "Bạn trả chi@example.com 20.000 ₫" },
+    ]);
+  });
+});
+
 describe("balancesCopy", () => {
   it("#134: has the section text", () => {
     expect(balancesCopy.settled).toBe("Đã cân bằng");

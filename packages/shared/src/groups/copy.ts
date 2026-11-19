@@ -60,3 +60,11 @@ export const balancesCopy = {
   unavailable: groupsCopy.unavailable,
   retry: groupsCopy.retry,
 } as const;
+
+/** The "Đã trả" button on a payment line of the group screen (#148). Tests check these strings. */
+export const settlementsCopy = {
+  pay: "Đã trả",
+  /** While the request runs. */
+  paying: "Đang ghi…",
+  unavailable: groupsCopy.unavailable,
+} as const;

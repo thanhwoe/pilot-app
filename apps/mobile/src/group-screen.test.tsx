@@ -23,6 +23,7 @@ jest.mock("@/lib/api", () => ({
     listExpenses: jest.fn(),
     createExpense: jest.fn(),
     getBalances: jest.fn(),
+    createSettlement: jest.fn(),
   },
 }));
 
@@ -32,6 +33,7 @@ const getGroup = jest.mocked(groupsApi.getGroup);
 const listExpenses = jest.mocked(groupsApi.listExpenses);
 const createExpense = jest.mocked(groupsApi.createExpense);
 const getBalances = jest.mocked(groupsApi.getBalances);
+const createSettlement = jest.mocked(groupsApi.createSettlement);
 
 const user = { id: crypto.randomUUID(), email: "an@example.com" };
 const bao = { userId: crypto.randomUUID(), email: "bao@example.com" };
@@ -954,5 +956,242 @@ describe("#134 balances", () => {
 
       expect(await secureSessionStore.get()).toBe("old-token");
     });
+  });
+});
+
+// #148: the "Đã trả" button on a payment line.
+describe("#148 recording a payment as paid", () => {
+  type BalancesAnswer = Awaited<ReturnType<typeof groupsApi.getBalances>>;
+  type SettlementAnswer = Awaited<ReturnType<typeof groupsApi.createSettlement>>;
+  const balancesWith = (...suggestions: { from: string; to: string; amount: number }[]) =>
+    ({
+      ok: true,
+      data: { balances: [], suggestions },
+    }) satisfies BalancesAnswer;
+  /** I owe Bao 20.000 ₫. */
+  const iOwe = balancesWith({ from: user.id, to: bao.userId, amount: 20000 });
+  const settled = balancesWith();
+  const stored: SettlementAnswer = {
+    ok: true,
+    data: {
+      id: crypto.randomUUID(),
+      groupId,
+      payerId: user.id,
+      payeeId: bao.userId,
+      amount: 20000,
+      createdAt: "2026-11-19T10:00:00.000Z",
+    },
+  };
+
+  const lineTexts = () =>
+    screen.queryAllByTestId("payment-line").map((node) => {
+      const flat = (child: unknown): string =>
+        Array.isArray(child) ? child.map(flat).join("") : String(child);
+      return flat(node.props.children);
+    });
+
+  // AC 1
+  test("AC 1: a line I pay shows a button with the text Đã trả", async () => {
+    getBalances.mockResolvedValue(iOwe);
+
+    await renderScreen();
+    await screen.findByTestId("payment-line");
+
+    expect(lineTexts()).toEqual(["Bạn trả bao@example.com 20.000 ₫"]);
+    expect(screen.getByTestId("pay-button")).toHaveTextContent("Đã trả");
+  });
+
+  // AC 13: the positive half is the screen with a line, then the same screen with none.
+  test("AC 13: no suggested payments, no button", async () => {
+    getBalances.mockResolvedValueOnce(iOwe).mockResolvedValue(settled);
+    await renderScreen();
+    await screen.findByTestId("pay-button");
+    createSettlement.mockResolvedValue(stored);
+
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await screen.findByTestId("balances-settled");
+
+    expect(screen.queryByTestId("pay-button")).toBeNull();
+  });
+
+  // AC 15
+  test("AC 15: a line where I am not the payer has no button, and my own line has one", async () => {
+    getBalances.mockResolvedValue(
+      balancesWith(
+        { from: bao.userId, to: user.id, amount: 5000 },
+        { from: user.id, to: bao.userId, amount: 20000 },
+      ),
+    );
+
+    await renderScreen();
+    await screen.findAllByTestId("payment-line");
+
+    expect(lineTexts()).toEqual([
+      "bao@example.com trả Bạn 5.000 ₫",
+      "Bạn trả bao@example.com 20.000 ₫",
+    ]);
+    expect(screen.getAllByTestId("pay-button")).toHaveLength(1);
+    createSettlement.mockResolvedValue({ ok: false, error: "unavailable" });
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await settle();
+    expect(createSettlement).toHaveBeenCalledWith("old-token", groupId, {
+      payerId: user.id,
+      payeeId: bao.userId,
+      amount: 20000,
+    });
+  });
+
+  // AC 2, 3, A5
+  test("AC 3: after a tap the balances load again, the line is gone and the title stays", async () => {
+    getBalances.mockResolvedValueOnce(iOwe).mockResolvedValue(settled);
+    createSettlement.mockResolvedValue(stored);
+    await renderScreen();
+    await screen.findByTestId("pay-button");
+
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await screen.findByTestId("balances-settled");
+
+    expect(createSettlement).toHaveBeenCalledTimes(1);
+    expect(getBalances).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("payment-line")).toBeNull();
+    expect(screen.getByTestId("group-title")).toHaveTextContent("Da Lat");
+    expect(screen.queryByTestId("pay-error")).toBeNull();
+  });
+
+  test("AC 3: shows the reduced remaining amount when the balances say so", async () => {
+    getBalances
+      .mockResolvedValueOnce(iOwe)
+      .mockResolvedValue(balancesWith({ from: user.id, to: bao.userId, amount: 5000 }));
+    createSettlement.mockResolvedValue(stored);
+    await renderScreen();
+    await screen.findByTestId("pay-button");
+
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await screen.findByText("Bạn trả bao@example.com 5.000 ₫");
+
+    expect(lineTexts()).toEqual(["Bạn trả bao@example.com 5.000 ₫"]);
+  });
+
+  // AC 11
+  test.each([
+    ["a network error or a 5xx", { ok: false, error: "unavailable" } as SettlementAnswer],
+    ["a rejected request", { ok: false, error: "invalid_request" } as SettlementAnswer],
+  ])(
+    "AC 11: %s shows the error and keeps the line, its button and the balances",
+    async (_name, answer) => {
+      getBalances.mockResolvedValue(iOwe);
+      createSettlement.mockResolvedValue(answer);
+      await renderScreen();
+      await screen.findByTestId("pay-button");
+
+      await fireEvent.press(screen.getByTestId("pay-button"));
+      await screen.findByTestId("pay-error");
+
+      expect(screen.getByTestId("pay-error")).toHaveTextContent(groupsCopy.unavailable);
+      expect(lineTexts()).toEqual(["Bạn trả bao@example.com 20.000 ₫"]);
+      expect(screen.getByTestId("pay-button")).toHaveTextContent("Đã trả");
+      expect(getBalances).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("AC 11: a new tap after an error sends the request again and clears the error", async () => {
+    getBalances.mockResolvedValueOnce(iOwe).mockResolvedValue(settled);
+    createSettlement
+      .mockResolvedValueOnce({ ok: false, error: "unavailable" })
+      .mockResolvedValue(stored);
+    await renderScreen();
+    await screen.findByTestId("pay-button");
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await screen.findByTestId("pay-error");
+
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await screen.findByTestId("balances-settled");
+
+    expect(createSettlement).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("pay-error")).toBeNull();
+  });
+
+  // AC 12: both presses land before React re-renders, so only the ref guard can stop the second.
+  test("AC 12: two taps before the first call answers send one request, and the button is disabled", async () => {
+    getBalances.mockResolvedValueOnce(iOwe).mockResolvedValue(settled);
+    const held = deferred<SettlementAnswer>();
+    createSettlement.mockReturnValue(held.promise);
+    await renderScreen();
+    await screen.findByTestId("pay-button");
+
+    await pressTwiceWithoutWaiting("pay-button");
+
+    expect(screen.getByTestId("pay-button").props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+    held.resolve(stored);
+    await settle();
+    expect(createSettlement).toHaveBeenCalledTimes(1);
+  });
+
+  test("AC 12: while one payment is in progress no line's button can send another", async () => {
+    getBalances.mockResolvedValue(
+      balancesWith(
+        { from: user.id, to: bao.userId, amount: 20000 },
+        { from: user.id, to: crypto.randomUUID(), amount: 1000 },
+      ),
+    );
+    const held = deferred<SettlementAnswer>();
+    createSettlement.mockReturnValue(held.promise);
+    await renderScreen();
+    await screen.findAllByTestId("pay-button");
+
+    const [first, second] = screen.getAllByTestId("pay-button");
+    const press = { stopPropagation() {}, preventDefault() {}, nativeEvent: {} };
+    await act(async () => {
+      first?.props.onClick(press);
+      second?.props.onClick(press);
+    });
+
+    expect(createSettlement).toHaveBeenCalledTimes(1);
+    for (const button of screen.getAllByTestId("pay-button")) {
+      expect(button.props.accessibilityState).toMatchObject({ disabled: true });
+    }
+    held.resolve({ ok: false, error: "unavailable" });
+    await settle();
+  });
+
+  // AC 16
+  test("AC 16: a stored payment and a failed reload show the balances error and no button until the retry works", async () => {
+    getBalances
+      .mockResolvedValueOnce(iOwe)
+      .mockResolvedValueOnce({ ok: false, error: "unavailable" })
+      .mockResolvedValue(balancesWith({ from: user.id, to: bao.userId, amount: 5000 }));
+    createSettlement.mockResolvedValue(stored);
+    await renderScreen();
+    await screen.findByTestId("pay-button");
+
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await screen.findByTestId("balances-error");
+
+    expect(screen.getByTestId("balances-retry")).toBeTruthy();
+    expect(screen.queryByTestId("pay-button")).toBeNull();
+    expect(screen.queryByTestId("payment-line")).toBeNull();
+
+    await fireEvent.press(screen.getByTestId("balances-retry"));
+    await screen.findByTestId("payment-line");
+
+    expect(lineTexts()).toEqual(["Bạn trả bao@example.com 5.000 ₫"]);
+    expect(screen.getAllByTestId("pay-button")).toHaveLength(1);
+    expect(createSettlement).toHaveBeenCalledTimes(1);
+  });
+
+  // [security]
+  test("[security] a 401 on the payment deletes the token and shows sign-in", async () => {
+    getBalances.mockResolvedValue(iOwe);
+    createSettlement.mockResolvedValue({ ok: false, error: "unauthorized" });
+    await renderScreen();
+    await screen.findByTestId("pay-button");
+
+    await fireEvent.press(screen.getByTestId("pay-button"));
+    await settle();
+
+    expect(await secureSessionStore.get()).toBeNull();
+    expect(screen.queryByTestId("group-screen")).toBeNull();
   });
 });

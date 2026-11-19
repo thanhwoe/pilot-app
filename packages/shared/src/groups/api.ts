@@ -27,6 +27,11 @@ import {
   type InvitePreviewResponse,
   invitePreviewResponseSchema,
 } from "../groups";
+import {
+  type CreateSettlementBody,
+  type SettlementResponse,
+  settlementResponseSchema,
+} from "../settlements";
 
 /** A JSON POST that also sends the session token. */
 function withBearer(init: RequestInit, token: string): RequestInit {
@@ -55,6 +60,12 @@ export interface GroupsApi {
     groupId: string,
     body: CreateExpenseBody,
   ): Promise<ApiResult<ExpenseResponse>>;
+  /** Records that one member paid another back; the body's amount is stored as given (#148). */
+  createSettlement(
+    token: string,
+    groupId: string,
+    body: CreateSettlementBody,
+  ): Promise<ApiResult<SettlementResponse>>;
 }
 
 /** `baseUrl` comes from each app, as for `createAuthApi`. */
@@ -117,6 +128,12 @@ export function createGroupsApi(
         `/groups/${encodeURIComponent(groupId)}/expenses`,
         withBearer(postJson(body), token),
         expenseResponseSchema,
+      ),
+    createSettlement: (token, groupId, body) =>
+      call(
+        `/groups/${encodeURIComponent(groupId)}/settlements`,
+        withBearer(postJson(body), token),
+        settlementResponseSchema,
       ),
   };
 }

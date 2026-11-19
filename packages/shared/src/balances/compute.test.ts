@@ -234,3 +234,34 @@ describe("balances of many generated groups", () => {
     }
   });
 });
+
+describe("computeBalances with settlements", () => {
+  it("#148 AC 4: a settlement of the whole debt gives 0 for both and no suggested payments", () => {
+    const balances = computeBalances(
+      [A, B],
+      [expense(B, 20_000, { [A]: 20_000 })],
+      [{ payerId: A, payeeId: B, amount: 20_000 }],
+    );
+
+    expect(byUser(balances)).toEqual({ [A]: 0, [B]: 0 });
+    expect(suggestSettlements(balances)).toEqual([]);
+  });
+
+  it("#148 AC 5: raises the payer and lowers the payee by the amount, and the sum stays 0", () => {
+    const balances = computeBalances(
+      [A, B, C],
+      [expense(C, 90_000, { [A]: 30_000, [B]: 30_000, [C]: 30_000 })],
+      [{ payerId: A, payeeId: C, amount: 10_000 }],
+    );
+
+    expect(byUser(balances)).toEqual({ [A]: -20_000, [B]: -30_000, [C]: 50_000 });
+    expect(balances.reduce((sum, entry) => sum + entry.balance, 0)).toBe(0);
+  });
+
+  it("#148 AC 5: counts a settlement between users who are not in memberIds", () => {
+    const balances = computeBalances([], [], [{ payerId: A, payeeId: B, amount: 5_000 }]);
+
+    expect(byUser(balances)).toEqual({ [A]: 5_000, [B]: -5_000 });
+    expect(balances.reduce((sum, entry) => sum + entry.balance, 0)).toBe(0);
+  });
+});

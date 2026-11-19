@@ -93,3 +93,24 @@ export const expenseShares = pgTable(
   },
   (table) => [primaryKey({ columns: [table.expenseId, table.userId] })],
 );
+
+/** A payment from one member to another that settles part of what they owe, in whole VND. */
+export const settlements = pgTable(
+  "settlements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    // Restrict, as for expenses: removing a user must not silently remove a recorded payment.
+    payerId: uuid("payer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    payeeId: uuid("payee_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    amount: integer("amount").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("settlements_group_id_created_at_idx").on(table.groupId, table.createdAt)],
+);

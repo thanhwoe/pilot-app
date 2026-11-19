@@ -8,6 +8,7 @@ import {
   groupResponseSchema,
   meResponseSchema,
   SESSION_TTL_MS,
+  settlementResponseSchema,
   signInResponseSchema,
 } from "@gop/shared";
 import { describe, expect, it } from "vitest";
@@ -90,6 +91,14 @@ function setup(stores: { groupStore?: GroupStore; expenseStore?: ExpenseStore } 
         method: "DELETE",
         url: `/groups/${groupId}/expenses/${expenseId}`,
         headers: bearer(token),
+      });
+    },
+    postSettlement(token: string | undefined, groupId: string, payload?: unknown) {
+      return app.inject({
+        method: "POST",
+        url: `/groups/${groupId}/settlements`,
+        headers: bearer(token),
+        payload: payload as Record<string, unknown> | undefined,
       });
     },
     postExpense(token: string | undefined, groupId: string, payload?: unknown) {
@@ -777,5 +786,151 @@ describe("DELETE /groups/:id/expenses/:expenseId", () => {
 
     expect(again.statusCode).toBe(404);
     expect(again.json()).toEqual({ error: "not_found" });
+  });
+});
+
+describe("POST /groups/:id/settlements", () => {
+  /** Ana paid 90000 for the three: Bao and Cy each owe her 30000. */
+  async function owing() {
+    const w = await world();
+    const res = await w.postExpense(w.ana.token, w.groupId, w.body());
+    expect(res.statusCode).toBe(201);
+    const pay = (overrides: Record<string, unknown> = {}) => ({
+      payerId: w.bao.id,
+      payeeId: w.ana.id,
+      amount: 30_000,
+      ...overrides,
+    });
+    const stored = () => w.expenseStore.listSettlements(w.groupId);
+    return { ...w, pay, stored };
+  }
+
+  it("#148 AC 2: answers 201 and stores the payer, payee, amount and group", async () => {
+    const { bao, ana, groupId, pay, postSettlement, stored } = await owing();
+
+    const res = await postSettlement(bao.token, groupId, pay());
+
+    expect(res.statusCode).toBe(201);
+    const parsed = settlementResponseSchema.parse(res.json());
+    expect(parsed).toMatchObject({ groupId, payerId: bao.id, payeeId: ana.id, amount: 30_000 });
+    expect(await stored()).toEqual([
+      expect.objectContaining({ id: parsed.id, groupId, payerId: bao.id, amount: 30_000 }),
+    ]);
+  });
+
+  it("#148 AC 3, 4: then the balances route shows 0 for the settled pair and no payment for them", async () => {
+    const { ana, bao, cy, groupId, pay, postSettlement, getBalances } = await owing();
+
+    await postSettlement(bao.token, groupId, pay());
+
+    const parsed = balancesResponseSchema.parse((await getBalances(bao.token, groupId)).json());
+    expect(
+      Object.fromEntries(parsed.balances.map((entry) => [entry.userId, entry.balance])),
+    ).toEqual({ [ana.id]: 30_000, [bao.id]: 0, [cy.id]: -30_000 });
+    expect(parsed.suggestions).toEqual([{ from: cy.id, to: ana.id, amount: 30_000 }]);
+  });
+
+  it("#148 A3: stores an amount that differs from the suggestion", async () => {
+    const { bao, groupId, pay, postSettlement, stored } = await owing();
+
+    const res = await postSettlement(bao.token, groupId, pay({ amount: 10_000 }));
+
+    expect(res.statusCode).toBe(201);
+    expect(await stored()).toEqual([expect.objectContaining({ amount: 10_000 })]);
+  });
+
+  it.each([0, -5, 1.5])(
+    "#148 AC 6: answers 400 and stores nothing for the amount %s",
+    async (amount) => {
+      const { bao, groupId, pay, postSettlement, stored } = await owing();
+      expect((await postSettlement(bao.token, groupId, pay())).statusCode).toBe(201);
+
+      const res = await postSettlement(bao.token, groupId, pay({ amount }));
+
+      expect(res.statusCode).toBe(400);
+      expect(errorResponseSchema.parse(res.json())).toEqual({ error: "invalid_request" });
+      expect(await stored()).toHaveLength(1);
+    },
+  );
+
+  it("#148 AC 7: answers 400 and stores nothing when payer and payee are the same member", async () => {
+    const { bao, groupId, pay, postSettlement, stored } = await owing();
+
+    const res = await postSettlement(bao.token, groupId, pay({ payeeId: bao.id }));
+
+    expect(res.statusCode).toBe(400);
+    expect(await stored()).toEqual([]);
+  });
+
+  it("#148 AC 8: answers 401 and stores nothing without a session", async () => {
+    const { bao, groupId, pay, postSettlement, stored } = await owing();
+    expect((await postSettlement(bao.token, groupId, pay())).statusCode).toBe(201);
+
+    const res = await postSettlement(undefined, groupId, pay());
+    const unknown = await postSettlement("not-a-token", groupId, pay());
+
+    expect(res.statusCode).toBe(401);
+    expect(unknown.statusCode).toBe(401);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "unauthorized" });
+    expect(await stored()).toHaveLength(1);
+  });
+
+  it("#148 AC 8: answers 401 and stores nothing for an ended session", async () => {
+    const { bao, groupId, pay, postSettlement, stored, advance } = await owing();
+    expect((await postSettlement(bao.token, groupId, pay())).statusCode).toBe(201);
+    advance(SESSION_TTL_MS + minute);
+
+    const res = await postSettlement(bao.token, groupId, pay());
+
+    expect(res.statusCode).toBe(401);
+    expect(await stored()).toHaveLength(1);
+  });
+
+  it("#148 AC 9: answers 404 and stores nothing for a user who is not in the group", async () => {
+    const { bao, groupId, pay, postSettlement, signIn, stored } = await owing();
+    expect((await postSettlement(bao.token, groupId, pay())).statusCode).toBe(201);
+    const outsider = await signIn("out@example.com");
+
+    const res = await postSettlement(outsider.token, groupId, pay());
+    const unknown = await postSettlement(bao.token, randomUUID(), pay());
+    const malformed = await postSettlement(bao.token, "not-an-id", pay());
+
+    expect(res.statusCode).toBe(404);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "not_found" });
+    expect(unknown.statusCode).toBe(404);
+    expect(malformed.statusCode).toBe(404);
+    expect(res.json()).toEqual(unknown.json());
+    expect(await stored()).toHaveLength(1);
+  });
+
+  it("#148 AC 10: answers 400 and stores nothing when the payee is not a member", async () => {
+    const { bao, groupId, pay, postSettlement, signIn, stored } = await owing();
+    const outsider = await signIn("out@example.com");
+
+    const res = await postSettlement(bao.token, groupId, pay({ payeeId: outsider.id }));
+
+    expect(res.statusCode).toBe(400);
+    expect(await stored()).toEqual([]);
+  });
+
+  it("#148 AC 10: answers 400 and stores nothing when the payer is not a member", async () => {
+    const { bao, groupId, pay, postSettlement, signIn, stored } = await owing();
+    const outsider = await signIn("out@example.com");
+
+    const res = await postSettlement(bao.token, groupId, pay({ payerId: outsider.id }));
+
+    expect(res.statusCode).toBe(400);
+    expect(await stored()).toEqual([]);
+  });
+
+  it("#148 AC 14: answers 403 and stores nothing when the payer is another member", async () => {
+    const { ana, bao, cy, groupId, pay, postSettlement, stored } = await owing();
+    expect((await postSettlement(bao.token, groupId, pay())).statusCode).toBe(201);
+
+    const res = await postSettlement(ana.token, groupId, pay({ payerId: cy.id }));
+
+    expect(res.statusCode).toBe(403);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "forbidden" });
+    expect(await stored()).toHaveLength(1);
   });
 });
