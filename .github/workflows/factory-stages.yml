@@ -89,8 +89,10 @@ jobs:
               if [ -z "$n" ]; then
                 echo "::notice::The PR closes no issue here, so no stage."
               elif [ "$ACTION" = opened ]; then
-                # QA step 2 only for an issue QA step 1 labelled.
-                if gh api "repos/$REPO/issues/$n" --jq '[.labels[].name] | index("qa")' | grep -q '^[0-9]'; then
+                # QA step 2 only for an issue QA step 1 labelled, or one with a qa/<N>-* branch:
+                # #145's plan stage dropped the `qa` label, so QA's tests never ran on the dev's PR.
+                if gh api "repos/$REPO/issues/$n" --jq '[.labels[].name] | index("qa")' | grep -q '^[0-9]' \
+                  || [ -n "$(gh api "repos/$REPO/git/matching-refs/heads/qa/$n-" --jq '.[].ref')" ]; then
                   text="qa $n"
                 else
                   echo "::notice::Issue #$n has no qa label, so no QA step 2."
