@@ -7,7 +7,8 @@
 //   node factory-marker.mjs line capture - ['<json fields>']
 //       the same, with no issue: capture puts it at the end of the body of the issue it creates
 //   node factory-marker.mjs read <comments file>
-//       prints {"markers":[…],"untrusted":n}. The file holds the issue's comments as a JSON array, or
+//       prints {"markers":[…],"untrusted":n,"kits":[…]}, `kits` being each kit version the trusted
+//       markers carry, in order (solo-factory#44). The file holds the issue's comments as a JSON array, or
 //       one per line (`gh api --paginate …/comments --jq '.[]'`). A marker counts only on a comment
 //       whose author_association is OWNER, MEMBER or COLLABORATOR; others are counted in `untrusted`.
 //   node factory-marker.mjs body <issue file>
@@ -88,7 +89,8 @@ export const readMarkers = (comments) => {
     }
     markers.push({ id: c.id, created_at: c.created_at, html_url: c.html_url, ...data });
   }
-  return { markers, untrusted };
+  const kits = [...new Set(markers.map((m) => m.kit).filter(Boolean))];
+  return { markers, untrusted, kits };
 };
 
 /** The marker in an issue's body, counted only when its author has write access. */
