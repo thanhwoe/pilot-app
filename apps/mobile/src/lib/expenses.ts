@@ -4,7 +4,10 @@ import {
   type GroupScreenState,
   loadBalances,
   loadGroupScreen,
+  type RecordSettlementOutcome,
+  recordSettlement,
   type SaveExpenseOutcome,
+  settlementsCopy,
   submitExpense,
 } from "@gop/shared";
 import { groupsApi } from "./api";
@@ -47,4 +50,18 @@ export async function saveMyExpense(values: {
 export async function loadMyBalances(groupId: string): Promise<BalancesState> {
   const token = await readToken();
   return token ? loadBalances(groupsApi, token, groupId) : { kind: "unavailable" };
+}
+
+/** Records that I paid `payeeId` the amount a payment line showed. */
+export async function recordMyPayment(payment: {
+  groupId: string;
+  myId: string;
+  payeeId: string;
+  amount: number;
+}): Promise<RecordSettlementOutcome> {
+  const token = await readToken();
+  if (!token) {
+    return { saved: false, error: settlementsCopy.unavailable };
+  }
+  return recordSettlement(groupsApi, token, payment);
 }
