@@ -46,6 +46,7 @@ export const errorResponseSchema = z.object({
     "too_many_requests",
     "unauthorized",
     "not_found",
+    "forbidden",
   ]),
 });
 

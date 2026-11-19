@@ -175,5 +175,42 @@ export function describeExpenseStoreContract(
       expect(await store.listExpenses(groupId)).toEqual([]);
       expect(await store.listExpenses(randomUUID())).toEqual([]);
     });
+
+    it("#145 AC 1: deletes an expense of the group and keeps the others", async () => {
+      const { groupId, add } = await setup();
+      const keep = await add(t0, "Giữ");
+      const gone = await add(at(minute), "Xoá");
+
+      expect(await store.deleteExpense(groupId, gone.id)).toBe(true);
+
+      expect(await store.listExpenses(groupId)).toEqual([keep]);
+    });
+
+    it("#145 AC 5: deletes nothing for another group's expense", async () => {
+      const { add } = await setup();
+      const other = await setup();
+      const expense = await add(t0);
+
+      expect(await store.deleteExpense(other.groupId, expense.id)).toBe(false);
+
+      expect(await store.listExpenses(expense.groupId)).toEqual([expense]);
+    });
+
+    it("#145 AC 5: deletes nothing for an unknown id", async () => {
+      const { groupId, add } = await setup();
+      const expense = await add(t0);
+
+      expect(await store.deleteExpense(groupId, randomUUID())).toBe(false);
+
+      expect(await store.listExpenses(groupId)).toEqual([expense]);
+    });
+
+    it("#145 AC 5: says false on a second delete", async () => {
+      const { groupId, add } = await setup();
+      const expense = await add(t0);
+
+      expect(await store.deleteExpense(groupId, expense.id)).toBe(true);
+      expect(await store.deleteExpense(groupId, expense.id)).toBe(false);
+    });
   });
 }

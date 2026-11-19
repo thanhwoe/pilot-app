@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { users } from "../db/schema";
+import { expenseShares, users } from "../db/schema";
 import { createPostgresGroupStore } from "../groups/store";
 import { createTestDb, type TestDb } from "../test/db";
 import { createPostgresExpenseStore } from "./store";
@@ -67,5 +68,31 @@ describe("Postgres ExpenseStore storage", () => {
     ).rejects.toThrow();
 
     expect(await store.listExpenses(groupId)).toEqual([]);
+  });
+
+  it("#145 A7: leaves no share of a deleted expense", async () => {
+    const ana = await insertUser(testDb);
+    const bao = await insertUser(testDb);
+    const groupId = await insertGroup(testDb, ana);
+    const store = createPostgresExpenseStore(testDb.database.db);
+    const expense = await store.addExpense({
+      groupId,
+      payerId: ana,
+      amount: 100_000,
+      description: "Ăn tối",
+      shares: [
+        { userId: ana, amount: 50_000 },
+        { userId: bao, amount: 50_000 },
+      ],
+      now: new Date("2026-11-06T10:00:00Z"),
+    });
+
+    expect(await store.deleteExpense(groupId, expense.id)).toBe(true);
+
+    const left = await testDb.database.db
+      .select()
+      .from(expenseShares)
+      .where(eq(expenseShares.expenseId, expense.id));
+    expect(left).toEqual([]);
   });
 });

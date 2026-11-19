@@ -85,6 +85,13 @@ function setup(stores: { groupStore?: GroupStore; expenseStore?: ExpenseStore } 
         headers: bearer(token),
       });
     },
+    deleteExpense(token: string | undefined, groupId: string, expenseId: string) {
+      return app.inject({
+        method: "DELETE",
+        url: `/groups/${groupId}/expenses/${expenseId}`,
+        headers: bearer(token),
+      });
+    },
     postExpense(token: string | undefined, groupId: string, payload?: unknown) {
       return app.inject({
         method: "POST",
@@ -604,5 +611,171 @@ describe("[security] #95 expense access", () => {
         await testDb.drop();
       }
     });
+  });
+});
+
+describe("DELETE /groups/:id/expenses/:expenseId", () => {
+  /** Ana's group with one expense Ana paid. */
+  async function withExpense() {
+    const w = await world();
+    const created = await w.postExpense(w.ana.token, w.groupId, w.body({ amount: 100_000 }));
+    const expense = expenseResponseSchema.parse(created.json());
+    return { ...w, expense };
+  }
+  const listed = async (w: Awaited<ReturnType<typeof withExpense>>, groupId = w.groupId) =>
+    expenseListResponseSchema.parse((await w.listExpenses(w.ana.token, groupId)).json()).expenses;
+
+  it("#145 AC 1: answers 204 with no body to the payer, and the store no longer holds it", async () => {
+    const w = await withExpense();
+
+    const res = await w.deleteExpense(w.ana.token, w.groupId, w.expense.id);
+
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe("");
+    expect(await w.expenseStore.listExpenses(w.groupId)).toEqual([]);
+  });
+
+  it("#145 AC 2: leaves the list without it and the balances at 0 with no suggestions", async () => {
+    const w = await withExpense();
+
+    await w.deleteExpense(w.ana.token, w.groupId, w.expense.id);
+
+    expect(await listed(w)).toEqual([]);
+    const balances = balancesResponseSchema.parse(
+      (await w.getBalances(w.bao.token, w.groupId)).json(),
+    );
+    expect(balances.suggestions).toEqual([]);
+    expect(balances.balances.every((b) => b.balance === 0)).toBe(true);
+  });
+
+  it("#145 AC 2: with two expenses, only the deleted one stops counting", async () => {
+    const w = await withExpense();
+    const second = expenseResponseSchema.parse(
+      (
+        await w.postExpense(
+          w.ana.token,
+          w.groupId,
+          w.body({ amount: 60_000, splitBetween: [w.ana.id, w.bao.id] }),
+        )
+      ).json(),
+    );
+
+    await w.deleteExpense(w.ana.token, w.groupId, w.expense.id);
+
+    expect((await listed(w)).map((e) => e.id)).toEqual([second.id]);
+    const balances = balancesResponseSchema.parse(
+      (await w.getBalances(w.ana.token, w.groupId)).json(),
+    );
+    expect(Object.fromEntries(balances.balances.map((b) => [b.userId, b.balance]))).toEqual({
+      [w.ana.id]: 30_000,
+      [w.bao.id]: -30_000,
+      [w.cy.id]: 0,
+    });
+  });
+
+  it("#145 AC 3: answers 403 forbidden to another member, and the expense still counts", async () => {
+    const w = await withExpense();
+
+    const res = await w.deleteExpense(w.bao.token, w.groupId, w.expense.id);
+
+    expect(res.statusCode).toBe(403);
+    expect(errorResponseSchema.parse(res.json())).toEqual({ error: "forbidden" });
+    expect((await listed(w)).map((e) => e.id)).toEqual([w.expense.id]);
+    const balances = balancesResponseSchema.parse(
+      (await w.getBalances(w.ana.token, w.groupId)).json(),
+    );
+    expect(balances.suggestions).not.toEqual([]);
+  });
+
+  it("#145 AC 4: answers a non-member, an unknown group and a malformed group id with one 404", async () => {
+    const w = await withExpense();
+    const dee = await w.signIn("dee@example.com");
+
+    const theirs = await w.deleteExpense(dee.token, w.groupId, w.expense.id);
+    const unknown = await w.deleteExpense(dee.token, randomUUID(), w.expense.id);
+    const malformed = await w.deleteExpense(dee.token, "not-an-id", w.expense.id);
+
+    expect(theirs.statusCode).toBe(404);
+    expect(errorResponseSchema.parse(theirs.json())).toEqual({ error: "not_found" });
+    expect(unknown.body).toBe(theirs.body);
+    expect(malformed.statusCode).toBe(404);
+    expect(malformed.body).toBe(theirs.body);
+    expect((await listed(w)).map((e) => e.id)).toEqual([w.expense.id]);
+  });
+
+  it("#145 AC 5: answers a member's unknown, malformed, other-group and deleted expense id with 404 not_found", async () => {
+    const w = await withExpense();
+    const otherGroup = await w.createGroup(w.ana.token);
+    const other = expenseResponseSchema.parse(
+      (
+        await w.postExpense(w.ana.token, otherGroup, {
+          payerId: w.ana.id,
+          amount: 5000,
+          description: "Khác",
+          splitBetween: [w.ana.id],
+        })
+      ).json(),
+    );
+    const gone = await w.postExpense(w.ana.token, w.groupId, w.body());
+    const goneId = expenseResponseSchema.parse(gone.json()).id;
+    await w.deleteExpense(w.ana.token, w.groupId, goneId);
+
+    const cases = [
+      ["unknown", randomUUID()],
+      ["malformed", "not-an-id"],
+      ["another group's", other.id],
+      ["already deleted", goneId],
+    ] as const;
+    for (const [label, id] of cases) {
+      const res = await w.deleteExpense(w.ana.token, w.groupId, id);
+      expect(res.statusCode, label).toBe(404);
+      expect(res.json(), label).toEqual({ error: "not_found" });
+    }
+    expect((await listed(w, otherGroup)).map((e) => e.id)).toEqual([other.id]);
+    expect((await listed(w)).map((e) => e.id)).toEqual([w.expense.id]);
+  });
+
+  it("#145 AC 6: answers 401 to no, an unknown and an ended session, and deletes nothing", async () => {
+    const app = setup();
+    const expired = await app.signIn("old@example.com");
+    app.advance(SESSION_TTL_MS);
+    const ana = await app.signIn("ana@example.com");
+    const groupId = await app.createGroup(ana.token);
+    const created = await app.postExpense(ana.token, groupId, {
+      payerId: ana.id,
+      amount: 1000,
+      description: "Giữ",
+      splitBetween: [ana.id],
+    });
+    const id = expenseResponseSchema.parse(created.json()).id;
+
+    for (const [label, token] of [
+      ["no token", undefined],
+      ["a wrong token", "made-up-token"],
+      ["an expired token", expired.token],
+    ] as const) {
+      const res = await app.deleteExpense(token, groupId, id);
+      expect(res.statusCode, label).toBe(401);
+      expect(res.json(), label).toEqual({ error: "unauthorized" });
+    }
+    expect((await app.expenseStore.listExpenses(groupId)).map((e) => e.id)).toEqual([id]);
+  });
+
+  it("#145 A5: answers a non-member on a real expense 404 not 403, and a member's wrong id 404 not 403", async () => {
+    const w = await withExpense();
+    const dee = await w.signIn("dee@example.com");
+
+    expect((await w.deleteExpense(dee.token, w.groupId, w.expense.id)).statusCode).toBe(404);
+    expect((await w.deleteExpense(w.bao.token, w.groupId, randomUUID())).statusCode).toBe(404);
+  });
+
+  it("#145 A6: answers a second DELETE of the same expense 404", async () => {
+    const w = await withExpense();
+
+    expect((await w.deleteExpense(w.ana.token, w.groupId, w.expense.id)).statusCode).toBe(204);
+    const again = await w.deleteExpense(w.ana.token, w.groupId, w.expense.id);
+
+    expect(again.statusCode).toBe(404);
+    expect(again.json()).toEqual({ error: "not_found" });
   });
 });
