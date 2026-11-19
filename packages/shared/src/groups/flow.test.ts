@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { signInCopy } from "../sign-in/copy";
 import type { GroupsApi } from "./api";
-import { groupsCopy } from "./copy";
+import { groupsCopy, settlementsCopy } from "./copy";
 import {
   acceptInvite,
   isBalancesSignedOut,
   isCreateSignedOut,
   isListSignedOut,
+  isRecordSettlementSignedOut,
   isSaveExpenseSignedOut,
   isScreenSignedOut,
   loadBalances,
@@ -14,6 +15,7 @@ import {
   loadGroups,
   makeInviteLink,
   openInvite,
+  recordSettlement,
   submitExpense,
   submitGroup,
 } from "./flow";
@@ -484,4 +486,55 @@ describe("loadBalances", () => {
       expect(isBalancesSignedOut(state)).toBe(false);
     },
   );
+});
+
+describe("recordSettlement", () => {
+  const payment = { groupId: group.id, myId: bao, payeeId: me, amount: 45000 };
+
+  it("#148 AC 2: sends me as the payer, the payee and the amount of the line", async () => {
+    const api = fakeApi();
+
+    expect(await recordSettlement(api, "t0ken", payment)).toEqual({ saved: true });
+    expect(api.createSettlement).toHaveBeenCalledWith("t0ken", group.id, {
+      payerId: bao,
+      payeeId: me,
+      amount: 45000,
+    });
+  });
+
+  it.each(["invalid_request", "not_found", "forbidden", "unavailable"] as const)(
+    "#148 AC 11: shows the error for %s and keeps the session",
+    async (error) => {
+      const api = fakeApi({
+        createSettlement: vi.fn(async () => ({ ok: false as const, error })),
+      });
+
+      expect(await recordSettlement(api, "t0ken", payment)).toEqual({
+        saved: false,
+        error: settlementsCopy.unavailable,
+      });
+    },
+  );
+
+  it("[security] #148: reads unauthorized as signed out, and only that", async () => {
+    const api = fakeApi({
+      createSettlement: vi.fn(async () => ({ ok: false as const, error: "unauthorized" as const })),
+    });
+
+    const outcome = await recordSettlement(api, "t0ken", payment);
+
+    expect(outcome).toEqual({ saved: false, signedOut: true });
+    expect(isRecordSettlementSignedOut(outcome)).toBe(true);
+    expect(isRecordSettlementSignedOut({ saved: true })).toBe(false);
+  });
+
+  it("#148: refuses an amount the API would refuse, and calls nothing", async () => {
+    const api = fakeApi();
+
+    expect(await recordSettlement(api, "t0ken", { ...payment, amount: 0 })).toEqual({
+      saved: false,
+      error: settlementsCopy.unavailable,
+    });
+    expect(api.createSettlement).not.toHaveBeenCalled();
+  });
 });
