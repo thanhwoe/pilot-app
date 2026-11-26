@@ -10,15 +10,17 @@ import {
   formatVnd,
   type GroupDetailResponse,
   isBalancesSignedOut,
+  isRecordSettlementSignedOut,
   isSaveExpenseSignedOut,
   isScreenSignedOut,
   parseAmountInput,
   payerLine,
   paymentLines,
+  settlementsCopy,
 } from "@gop/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { loadMyBalances, loadMyGroupScreen, saveMyExpense } from "@/lib/expenses";
+import { loadMyBalances, loadMyGroupScreen, recordMyPayment, saveMyExpense } from "@/lib/expenses";
 import { useSession } from "@/lib/session";
 import { useSessionGuard } from "@/lib/session-guard";
 
@@ -137,7 +139,15 @@ export function GroupScreen({ groupId }: { groupId: string }) {
           {screen.group.name}
         </Text>
       )}
-      {myId && <BalancesSection state={balances} myId={myId} onRetry={retryBalances} />}
+      {myId && (
+        <BalancesSection
+          state={balances}
+          myId={myId}
+          groupId={groupId}
+          onRetry={retryBalances}
+          onPaid={loadBalancesNow}
+        />
+      )}
       {(screen === null || reload === "running") && (
         <Text testID="expenses-loading">{expensesCopy.loading}</Text>
       )}
@@ -202,12 +212,51 @@ export function GroupScreen({ groupId }: { groupId: string }) {
 function BalancesSection({
   state,
   myId,
+  groupId,
   onRetry,
+  onPaid,
 }: {
   state: BalancesState | null;
   myId: string;
+  groupId: string;
   onRetry: () => void;
+  /** Reloads the balances from the API after a payment was recorded. */
+  onPaid: () => Promise<void>;
 }) {
+  const guard = useSessionGuard();
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  // `paying` disables the buttons only from the next render; this stops a second fast tap, and a
+  // tap on another line's button, while a payment is being recorded.
+  const inFlight = useRef(false);
+
+  async function pay(payeeId: string, amount: number) {
+    if (inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
+    setPaying(true);
+    setPayError(null);
+    try {
+      const outcome = await guard(
+        () => recordMyPayment({ groupId, myId, payeeId, amount }),
+        isRecordSettlementSignedOut,
+      );
+      if (!outcome) {
+        return;
+      }
+      if (!outcome.saved) {
+        setPayError(outcome.error);
+        return;
+      }
+      // No arithmetic of our own: the lines are what the API says after the payment.
+      await onPaid();
+    } finally {
+      inFlight.current = false;
+      setPaying(false);
+    }
+  }
+
   const loaded = state?.kind === "loaded" ? state : null;
   const rows = loaded ? balanceRows(loaded.balances.balances, myId, loaded.members) : [];
   const lines = loaded ? paymentLines(loaded.balances.suggestions, myId, loaded.members) : [];
@@ -240,10 +289,30 @@ function BalancesSection({
               <Text style={styles.description}>{row.amount}</Text>
             </View>
           ))}
-          {lines.map((line) => (
-            <Text key={`${line.from}-${line.to}`} testID="payment-line" style={styles.description}>
-              {line.text}
+          {payError && (
+            <Text testID="pay-error" style={styles.error} accessibilityRole="alert">
+              {payError}
             </Text>
+          )}
+          {lines.map((line) => (
+            <View key={`${line.from}-${line.to}`} style={styles.row}>
+              <Text testID="payment-line" style={[styles.description, styles.rowText]}>
+                {line.text}
+              </Text>
+              {line.from === myId && (
+                <Pressable
+                  testID="pay-button"
+                  style={[styles.button, paying && styles.busy]}
+                  // `disabled` alone, as on the save button: see `ExpenseForm`.
+                  disabled={paying}
+                  onPress={() => pay(line.to, line.amount)}
+                >
+                  <Text style={styles.buttonText}>
+                    {paying ? settlementsCopy.paying : settlementsCopy.pay}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           ))}
         </>
       )}
