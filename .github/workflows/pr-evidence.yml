@@ -48,3 +48,40 @@ jobs:
             exit 1
           fi
           echo "No evidence still to come."
+
+      # From agilab-console#3, whose screenshots were linked as `[](docs/evidence/...)`: a relative
+      # link in a PR description resolves against the PR's page, so GitHub showed no image. The
+      # pr-describer agent embeds them as https://github.com/<owner>/<repo>/blob/<sha>/...?raw=true.
+      - name: Evidence images use links that resolve
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if grep -nE '\]\(\.?/?docs/evidence/' <<<"$BODY"; then
+            echo "::error::The PR description links evidence with a relative path (above), which GitHub can't resolve in a description. Embed each image as ![<step>](https://github.com/${{ github.repository }}/blob/<sha>/docs/evidence/<N>/<file>?raw=true)."
+            exit 1
+          fi
+          echo "Evidence links resolve."
+
+      # From agilab-console#6, whose description the build wrote inline instead of with
+      # describe-pr: no risk tier and no reading estimate, so gate 3 couldn't be measured
+      # (solo-factory#47). Turned on after agilab-console#13, the first PR from kit 0.44.0,
+      # had both lines.
+      - name: Risk tier and reading estimate in the description
+        if: startsWith(github.head_ref, 'feat/') || startsWith(github.head_ref, 'fix/')
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          ok=true
+          if ! grep -qF '**Risk:**' <<<"$BODY"; then
+            echo "::error::The PR description has no '**Risk:**' line."
+            ok=false
+          fi
+          if ! grep -qE 'takes about [0-9][^ ]* minutes?' <<<"$BODY"; then
+            echo "::error::The PR description has no 'takes about <N> minutes' reading estimate."
+            ok=false
+          fi
+          if [ "$ok" = false ]; then
+            echo "::error::Write the description with describe-pr (the pr-describer agent), not by hand."
+            exit 1
+          fi
+          echo "Risk tier and reading estimate found."
